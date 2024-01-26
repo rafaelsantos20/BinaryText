@@ -320,8 +320,8 @@ namespace BinaryText
             } else if(size_ < 1 and buffer_ != nullptr) {
                 throw Error(Error::Type::INVALID_ARGUMENTS_ERROR);
             } else if(size_ < 1 and buffer_ == nullptr) {
-                _size = size_;
-                _buffer = buffer_;
+                _size = 0;
+                _buffer = nullptr;
             } else {
                 _size = size_;
 
