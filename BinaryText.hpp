@@ -227,8 +227,8 @@ namespace BinaryText
             BaseReverseIterator() noexcept : _address(nullptr) {}
             explicit BaseReverseIterator(const Pointer address_) : _address(address_) {}
 
-            BaseIterator<ValueType> Base() const noexcept { BaseIterator<ValueType> iterator(_address); return ++iterator; }
-            BaseIterator<ValueType> base() const noexcept { BaseIterator<ValueType> iterator(_address); return ++iterator; }
+            BaseIterator<ValueType> Base() const { BaseIterator<ValueType> iterator(_address); return ++iterator; }
+            BaseIterator<ValueType> base() const { BaseIterator<ValueType> iterator(_address); return ++iterator; }
 
             Reference operator[](const DifferenceType position_) const { return _address[position_]; }
             Reference operator*() const { return *_address; }
