@@ -1030,7 +1030,7 @@ namespace BinaryText
         std::unique_ptr<ValueType[]> _buffer;
     };
 
-    /// @brief How many bits there are in a char on this platform
+    /// @brief How many bits there are in a char on this platform.
     constexpr int charSize = std::numeric_limits<unsigned char>::digits;
 
     /// @brief A namespace that has functions that implement Base16 encoding and decoding in accordance to RFC 4648 §8.
