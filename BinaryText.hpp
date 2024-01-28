@@ -27,24 +27,26 @@ For more information, please refer to <https://unlicense.org>
 
 #pragma once
 
-#include <algorithm>
-#include <array>
-#include <bitset>
-#include <climits>
-#include <cmath>
-#include <cstddef>
-#include <exception>
-#include <filesystem>
-#include <format>
-#include <fstream>
-#include <iostream>
-#include <iterator>
-#include <limits>
-#include <memory>
-#include <new>
-#include <source_location>
-#include <string>
-#include <vector>
+#include <algorithm>       // std::fill / std::copy
+#include <array>           // std::array
+#include <bitset>          // std::bitset
+#include <cmath>           // std::ceil / std::floor
+#include <cstddef>         // std::size_t / std::ptrdiff_t
+#include <exception>       // std::terminate / std::exception
+#include <filesystem>      // std::filesystem::path
+#include <format>          // std::format
+#include <fstream>         // std::ifstream / std::ofstream
+#include <iostream>        // std::cerr / std::endl
+#include <iterator>        // std::contiguous_iterator_tag / std::contiguous_iterator / std::next / std::advance / std::prev
+#include <limits>          // std::numeric_limits::digits / std::numeric_limits::max
+#include <memory>          // std::unique_ptr / std::make_unique
+#include <new>             // std::bad_alloc
+#include <source_location> // std::source_location
+#include <stdexcept>       // std::length_error
+#include <string>          // std::string
+#include <type_traits>     // std::remove_const_t / std::disjunction_v / std::is_same_v / std::is_same
+#include <utility>         // std::swap / std::move
+#include <vector>          // std::vector
 
 /// @brief BinaryText namespace.
 namespace BinaryText
@@ -1028,6 +1030,9 @@ namespace BinaryText
         std::unique_ptr<ValueType[]> _buffer;
     };
 
+    /// @brief How many bits there are in a char on this platform
+    constexpr int charSize = std::numeric_limits<unsigned char>::digits;
+
     /// @brief A namespace that has functions that implement Base16 encoding and decoding in accordance to RFC 4648 §8.
     namespace Base16
     {
@@ -1094,7 +1099,7 @@ namespace BinaryText
             UPPERCASE  ///< Uppercase (example: 7A7A).
         };
 
-        static_assert(CHAR_BIT == 8, "This Base16 namespace only accepts CHAR_BIT to be 8");
+        static_assert(charSize == 8, "These Base16 functions only works if a char is 8 bits big");
 
         /**
          * @brief Encodes a not-encoded string into a Base16 encoded string.
@@ -1115,15 +1120,15 @@ namespace BinaryText
             }
 
             for(std::string::const_iterator iter(string_.cbegin()); iter != string_.cend(); ++iter) {
-                std::bitset<CHAR_BIT> bitset(*iter);
+                std::bitset<charSize> bitset(*iter);
 
                 for(unsigned int i(0U); i < 2U; ++i) {
-                    std::bitset<CHAR_BIT / 2> partialBitset;
+                    std::bitset<charSize / 2> partialBitset;
 
                     if(i == 0U) {
-                        partialBitset = std::bitset<CHAR_BIT / 2>((bitset >> 4).to_ullong());
+                        partialBitset = std::bitset<charSize / 2>((bitset >> 4).to_ullong());
                     } else {
-                        partialBitset = std::bitset<CHAR_BIT / 2>(((bitset << 4) >> 4).to_ullong());
+                        partialBitset = std::bitset<charSize / 2>(((bitset << 4) >> 4).to_ullong());
                     }
 
                     switch(case_) {
@@ -1203,15 +1208,15 @@ namespace BinaryText
             }
 
             for(typename ByteBuffer<ByteType>::ConstantIterator iter(byteBuffer_.ConstantBegin()); iter != byteBuffer_.ConstantEnd(); ++iter) {
-                std::bitset<CHAR_BIT> bitset(static_cast<char>(*iter));
+                std::bitset<charSize> bitset(static_cast<char>(*iter));
 
                 for(unsigned int i(0U); i < 2U; ++i) {
-                    std::bitset<CHAR_BIT / 2> partialBitset;
+                    std::bitset<charSize / 2> partialBitset;
 
                     if(i == 0U) {
-                        partialBitset = std::bitset<CHAR_BIT / 2>((bitset >> 4).to_ullong());
+                        partialBitset = std::bitset<charSize / 2>((bitset >> 4).to_ullong());
                     } else {
-                        partialBitset = std::bitset<CHAR_BIT / 2>(((bitset << 4) >> 4).to_ullong());
+                        partialBitset = std::bitset<charSize / 2>(((bitset << 4) >> 4).to_ullong());
                     }
 
                     switch(case_) {
@@ -1291,7 +1296,7 @@ namespace BinaryText
                 if(*iter == ' ' or *iter == '\n') {
                     continue;
                 } else {
-                    std::bitset<CHAR_BIT> bitset;
+                    std::bitset<charSize> bitset;
                     unsigned int counter(0U);
 
                     for(std::string::const_iterator jter(iter); jter != encodedString_.cend(); ++jter) {
@@ -1305,33 +1310,33 @@ namespace BinaryText
                             }
                         } else {
                             counter += 1U;
-                            bitset <<= CHAR_BIT / 2;
+                            bitset <<= charSize / 2;
 
                             switch(case_) {
                                 case Case::MIXED: {
                                     switch(*jter) {
-                                        case '0': bitset |= std::bitset<CHAR_BIT>(0B0000ULL); break;
-                                        case '1': bitset |= std::bitset<CHAR_BIT>(0B0001ULL); break;
-                                        case '2': bitset |= std::bitset<CHAR_BIT>(0B0010ULL); break;
-                                        case '3': bitset |= std::bitset<CHAR_BIT>(0B0011ULL); break;
-                                        case '4': bitset |= std::bitset<CHAR_BIT>(0B0100ULL); break;
-                                        case '5': bitset |= std::bitset<CHAR_BIT>(0B0101ULL); break;
-                                        case '6': bitset |= std::bitset<CHAR_BIT>(0B0110ULL); break;
-                                        case '7': bitset |= std::bitset<CHAR_BIT>(0B0111ULL); break;
-                                        case '8': bitset |= std::bitset<CHAR_BIT>(0B1000ULL); break;
-                                        case '9': bitset |= std::bitset<CHAR_BIT>(0B1001ULL); break;
-                                        case 'A': bitset |= std::bitset<CHAR_BIT>(0B1010ULL); break;
-                                        case 'B': bitset |= std::bitset<CHAR_BIT>(0B1011ULL); break;
-                                        case 'C': bitset |= std::bitset<CHAR_BIT>(0B1100ULL); break;
-                                        case 'D': bitset |= std::bitset<CHAR_BIT>(0B1101ULL); break;
-                                        case 'E': bitset |= std::bitset<CHAR_BIT>(0B1110ULL); break;
-                                        case 'F': bitset |= std::bitset<CHAR_BIT>(0B1111ULL); break;
-                                        case 'a': bitset |= std::bitset<CHAR_BIT>(0B1010ULL); break;
-                                        case 'b': bitset |= std::bitset<CHAR_BIT>(0B1011ULL); break;
-                                        case 'c': bitset |= std::bitset<CHAR_BIT>(0B1100ULL); break;
-                                        case 'd': bitset |= std::bitset<CHAR_BIT>(0B1101ULL); break;
-                                        case 'e': bitset |= std::bitset<CHAR_BIT>(0B1110ULL); break;
-                                        case 'f': bitset |= std::bitset<CHAR_BIT>(0B1111ULL); break;
+                                        case '0': bitset |= std::bitset<charSize>(0B0000ULL); break;
+                                        case '1': bitset |= std::bitset<charSize>(0B0001ULL); break;
+                                        case '2': bitset |= std::bitset<charSize>(0B0010ULL); break;
+                                        case '3': bitset |= std::bitset<charSize>(0B0011ULL); break;
+                                        case '4': bitset |= std::bitset<charSize>(0B0100ULL); break;
+                                        case '5': bitset |= std::bitset<charSize>(0B0101ULL); break;
+                                        case '6': bitset |= std::bitset<charSize>(0B0110ULL); break;
+                                        case '7': bitset |= std::bitset<charSize>(0B0111ULL); break;
+                                        case '8': bitset |= std::bitset<charSize>(0B1000ULL); break;
+                                        case '9': bitset |= std::bitset<charSize>(0B1001ULL); break;
+                                        case 'A': bitset |= std::bitset<charSize>(0B1010ULL); break;
+                                        case 'B': bitset |= std::bitset<charSize>(0B1011ULL); break;
+                                        case 'C': bitset |= std::bitset<charSize>(0B1100ULL); break;
+                                        case 'D': bitset |= std::bitset<charSize>(0B1101ULL); break;
+                                        case 'E': bitset |= std::bitset<charSize>(0B1110ULL); break;
+                                        case 'F': bitset |= std::bitset<charSize>(0B1111ULL); break;
+                                        case 'a': bitset |= std::bitset<charSize>(0B1010ULL); break;
+                                        case 'b': bitset |= std::bitset<charSize>(0B1011ULL); break;
+                                        case 'c': bitset |= std::bitset<charSize>(0B1100ULL); break;
+                                        case 'd': bitset |= std::bitset<charSize>(0B1101ULL); break;
+                                        case 'e': bitset |= std::bitset<charSize>(0B1110ULL); break;
+                                        case 'f': bitset |= std::bitset<charSize>(0B1111ULL); break;
                                         default: throw Error(Error::Type::STRING_PARSE_ERROR);
                                     }
 
@@ -1339,22 +1344,22 @@ namespace BinaryText
                                 }
                                 case Case::UPPERCASE: {
                                     switch(*jter) {
-                                        case '0': bitset |= std::bitset<CHAR_BIT>(0B0000ULL); break;
-                                        case '1': bitset |= std::bitset<CHAR_BIT>(0B0001ULL); break;
-                                        case '2': bitset |= std::bitset<CHAR_BIT>(0B0010ULL); break;
-                                        case '3': bitset |= std::bitset<CHAR_BIT>(0B0011ULL); break;
-                                        case '4': bitset |= std::bitset<CHAR_BIT>(0B0100ULL); break;
-                                        case '5': bitset |= std::bitset<CHAR_BIT>(0B0101ULL); break;
-                                        case '6': bitset |= std::bitset<CHAR_BIT>(0B0110ULL); break;
-                                        case '7': bitset |= std::bitset<CHAR_BIT>(0B0111ULL); break;
-                                        case '8': bitset |= std::bitset<CHAR_BIT>(0B1000ULL); break;
-                                        case '9': bitset |= std::bitset<CHAR_BIT>(0B1001ULL); break;
-                                        case 'A': bitset |= std::bitset<CHAR_BIT>(0B1010ULL); break;
-                                        case 'B': bitset |= std::bitset<CHAR_BIT>(0B1011ULL); break;
-                                        case 'C': bitset |= std::bitset<CHAR_BIT>(0B1100ULL); break;
-                                        case 'D': bitset |= std::bitset<CHAR_BIT>(0B1101ULL); break;
-                                        case 'E': bitset |= std::bitset<CHAR_BIT>(0B1110ULL); break;
-                                        case 'F': bitset |= std::bitset<CHAR_BIT>(0B1111ULL); break;
+                                        case '0': bitset |= std::bitset<charSize>(0B0000ULL); break;
+                                        case '1': bitset |= std::bitset<charSize>(0B0001ULL); break;
+                                        case '2': bitset |= std::bitset<charSize>(0B0010ULL); break;
+                                        case '3': bitset |= std::bitset<charSize>(0B0011ULL); break;
+                                        case '4': bitset |= std::bitset<charSize>(0B0100ULL); break;
+                                        case '5': bitset |= std::bitset<charSize>(0B0101ULL); break;
+                                        case '6': bitset |= std::bitset<charSize>(0B0110ULL); break;
+                                        case '7': bitset |= std::bitset<charSize>(0B0111ULL); break;
+                                        case '8': bitset |= std::bitset<charSize>(0B1000ULL); break;
+                                        case '9': bitset |= std::bitset<charSize>(0B1001ULL); break;
+                                        case 'A': bitset |= std::bitset<charSize>(0B1010ULL); break;
+                                        case 'B': bitset |= std::bitset<charSize>(0B1011ULL); break;
+                                        case 'C': bitset |= std::bitset<charSize>(0B1100ULL); break;
+                                        case 'D': bitset |= std::bitset<charSize>(0B1101ULL); break;
+                                        case 'E': bitset |= std::bitset<charSize>(0B1110ULL); break;
+                                        case 'F': bitset |= std::bitset<charSize>(0B1111ULL); break;
                                         default: throw Error(Error::Type::STRING_PARSE_ERROR);
                                     }
 
@@ -1362,22 +1367,22 @@ namespace BinaryText
                                 }
                                 case Case::LOWERCASE: {
                                     switch(*jter) {
-                                        case '0': bitset |= std::bitset<CHAR_BIT>(0B0000ULL); break;
-                                        case '1': bitset |= std::bitset<CHAR_BIT>(0B0001ULL); break;
-                                        case '2': bitset |= std::bitset<CHAR_BIT>(0B0010ULL); break;
-                                        case '3': bitset |= std::bitset<CHAR_BIT>(0B0011ULL); break;
-                                        case '4': bitset |= std::bitset<CHAR_BIT>(0B0100ULL); break;
-                                        case '5': bitset |= std::bitset<CHAR_BIT>(0B0101ULL); break;
-                                        case '6': bitset |= std::bitset<CHAR_BIT>(0B0110ULL); break;
-                                        case '7': bitset |= std::bitset<CHAR_BIT>(0B0111ULL); break;
-                                        case '8': bitset |= std::bitset<CHAR_BIT>(0B1000ULL); break;
-                                        case '9': bitset |= std::bitset<CHAR_BIT>(0B1001ULL); break;
-                                        case 'a': bitset |= std::bitset<CHAR_BIT>(0B1010ULL); break;
-                                        case 'b': bitset |= std::bitset<CHAR_BIT>(0B1011ULL); break;
-                                        case 'c': bitset |= std::bitset<CHAR_BIT>(0B1100ULL); break;
-                                        case 'd': bitset |= std::bitset<CHAR_BIT>(0B1101ULL); break;
-                                        case 'e': bitset |= std::bitset<CHAR_BIT>(0B1110ULL); break;
-                                        case 'f': bitset |= std::bitset<CHAR_BIT>(0B1111ULL); break;
+                                        case '0': bitset |= std::bitset<charSize>(0B0000ULL); break;
+                                        case '1': bitset |= std::bitset<charSize>(0B0001ULL); break;
+                                        case '2': bitset |= std::bitset<charSize>(0B0010ULL); break;
+                                        case '3': bitset |= std::bitset<charSize>(0B0011ULL); break;
+                                        case '4': bitset |= std::bitset<charSize>(0B0100ULL); break;
+                                        case '5': bitset |= std::bitset<charSize>(0B0101ULL); break;
+                                        case '6': bitset |= std::bitset<charSize>(0B0110ULL); break;
+                                        case '7': bitset |= std::bitset<charSize>(0B0111ULL); break;
+                                        case '8': bitset |= std::bitset<charSize>(0B1000ULL); break;
+                                        case '9': bitset |= std::bitset<charSize>(0B1001ULL); break;
+                                        case 'a': bitset |= std::bitset<charSize>(0B1010ULL); break;
+                                        case 'b': bitset |= std::bitset<charSize>(0B1011ULL); break;
+                                        case 'c': bitset |= std::bitset<charSize>(0B1100ULL); break;
+                                        case 'd': bitset |= std::bitset<charSize>(0B1101ULL); break;
+                                        case 'e': bitset |= std::bitset<charSize>(0B1110ULL); break;
+                                        case 'f': bitset |= std::bitset<charSize>(0B1111ULL); break;
                                         default: throw Error(Error::Type::STRING_PARSE_ERROR);
                                     }
 
@@ -1396,7 +1401,7 @@ namespace BinaryText
 
                     switch(counter) {
                         case 2U: break;
-                        case 1U: bitset <<= CHAR_BIT / 2; break;
+                        case 1U: bitset <<= charSize / 2; break;
                         default: UnreachableTerminate();
                     }
 
@@ -1425,7 +1430,7 @@ namespace BinaryText
                 if(*iter == ' ' or *iter == '\n') {
                     continue;
                 } else {
-                    std::bitset<CHAR_BIT> bitset;
+                    std::bitset<charSize> bitset;
                     unsigned int counter(0U);
 
                     for(std::string::const_iterator jter(iter); jter != encodedString_.cend(); ++jter) {
@@ -1439,33 +1444,33 @@ namespace BinaryText
                             }
                         } else {
                             counter += 1U;
-                            bitset <<= CHAR_BIT / 2;
+                            bitset <<= charSize / 2;
 
                             switch(case_) {
                                 case Case::MIXED: {
                                     switch(*jter) {
-                                        case '0': bitset |= std::bitset<CHAR_BIT>(0B0000ULL); break;
-                                        case '1': bitset |= std::bitset<CHAR_BIT>(0B0001ULL); break;
-                                        case '2': bitset |= std::bitset<CHAR_BIT>(0B0010ULL); break;
-                                        case '3': bitset |= std::bitset<CHAR_BIT>(0B0011ULL); break;
-                                        case '4': bitset |= std::bitset<CHAR_BIT>(0B0100ULL); break;
-                                        case '5': bitset |= std::bitset<CHAR_BIT>(0B0101ULL); break;
-                                        case '6': bitset |= std::bitset<CHAR_BIT>(0B0110ULL); break;
-                                        case '7': bitset |= std::bitset<CHAR_BIT>(0B0111ULL); break;
-                                        case '8': bitset |= std::bitset<CHAR_BIT>(0B1000ULL); break;
-                                        case '9': bitset |= std::bitset<CHAR_BIT>(0B1001ULL); break;
-                                        case 'A': bitset |= std::bitset<CHAR_BIT>(0B1010ULL); break;
-                                        case 'B': bitset |= std::bitset<CHAR_BIT>(0B1011ULL); break;
-                                        case 'C': bitset |= std::bitset<CHAR_BIT>(0B1100ULL); break;
-                                        case 'D': bitset |= std::bitset<CHAR_BIT>(0B1101ULL); break;
-                                        case 'E': bitset |= std::bitset<CHAR_BIT>(0B1110ULL); break;
-                                        case 'F': bitset |= std::bitset<CHAR_BIT>(0B1111ULL); break;
-                                        case 'a': bitset |= std::bitset<CHAR_BIT>(0B1010ULL); break;
-                                        case 'b': bitset |= std::bitset<CHAR_BIT>(0B1011ULL); break;
-                                        case 'c': bitset |= std::bitset<CHAR_BIT>(0B1100ULL); break;
-                                        case 'd': bitset |= std::bitset<CHAR_BIT>(0B1101ULL); break;
-                                        case 'e': bitset |= std::bitset<CHAR_BIT>(0B1110ULL); break;
-                                        case 'f': bitset |= std::bitset<CHAR_BIT>(0B1111ULL); break;
+                                        case '0': bitset |= std::bitset<charSize>(0B0000ULL); break;
+                                        case '1': bitset |= std::bitset<charSize>(0B0001ULL); break;
+                                        case '2': bitset |= std::bitset<charSize>(0B0010ULL); break;
+                                        case '3': bitset |= std::bitset<charSize>(0B0011ULL); break;
+                                        case '4': bitset |= std::bitset<charSize>(0B0100ULL); break;
+                                        case '5': bitset |= std::bitset<charSize>(0B0101ULL); break;
+                                        case '6': bitset |= std::bitset<charSize>(0B0110ULL); break;
+                                        case '7': bitset |= std::bitset<charSize>(0B0111ULL); break;
+                                        case '8': bitset |= std::bitset<charSize>(0B1000ULL); break;
+                                        case '9': bitset |= std::bitset<charSize>(0B1001ULL); break;
+                                        case 'A': bitset |= std::bitset<charSize>(0B1010ULL); break;
+                                        case 'B': bitset |= std::bitset<charSize>(0B1011ULL); break;
+                                        case 'C': bitset |= std::bitset<charSize>(0B1100ULL); break;
+                                        case 'D': bitset |= std::bitset<charSize>(0B1101ULL); break;
+                                        case 'E': bitset |= std::bitset<charSize>(0B1110ULL); break;
+                                        case 'F': bitset |= std::bitset<charSize>(0B1111ULL); break;
+                                        case 'a': bitset |= std::bitset<charSize>(0B1010ULL); break;
+                                        case 'b': bitset |= std::bitset<charSize>(0B1011ULL); break;
+                                        case 'c': bitset |= std::bitset<charSize>(0B1100ULL); break;
+                                        case 'd': bitset |= std::bitset<charSize>(0B1101ULL); break;
+                                        case 'e': bitset |= std::bitset<charSize>(0B1110ULL); break;
+                                        case 'f': bitset |= std::bitset<charSize>(0B1111ULL); break;
                                         default: throw Error(Error::Type::STRING_PARSE_ERROR);
                                     }
 
@@ -1473,22 +1478,22 @@ namespace BinaryText
                                 }
                                 case Case::UPPERCASE: {
                                     switch(*jter) {
-                                        case '0': bitset |= std::bitset<CHAR_BIT>(0B0000ULL); break;
-                                        case '1': bitset |= std::bitset<CHAR_BIT>(0B0001ULL); break;
-                                        case '2': bitset |= std::bitset<CHAR_BIT>(0B0010ULL); break;
-                                        case '3': bitset |= std::bitset<CHAR_BIT>(0B0011ULL); break;
-                                        case '4': bitset |= std::bitset<CHAR_BIT>(0B0100ULL); break;
-                                        case '5': bitset |= std::bitset<CHAR_BIT>(0B0101ULL); break;
-                                        case '6': bitset |= std::bitset<CHAR_BIT>(0B0110ULL); break;
-                                        case '7': bitset |= std::bitset<CHAR_BIT>(0B0111ULL); break;
-                                        case '8': bitset |= std::bitset<CHAR_BIT>(0B1000ULL); break;
-                                        case '9': bitset |= std::bitset<CHAR_BIT>(0B1001ULL); break;
-                                        case 'A': bitset |= std::bitset<CHAR_BIT>(0B1010ULL); break;
-                                        case 'B': bitset |= std::bitset<CHAR_BIT>(0B1011ULL); break;
-                                        case 'C': bitset |= std::bitset<CHAR_BIT>(0B1100ULL); break;
-                                        case 'D': bitset |= std::bitset<CHAR_BIT>(0B1101ULL); break;
-                                        case 'E': bitset |= std::bitset<CHAR_BIT>(0B1110ULL); break;
-                                        case 'F': bitset |= std::bitset<CHAR_BIT>(0B1111ULL); break;
+                                        case '0': bitset |= std::bitset<charSize>(0B0000ULL); break;
+                                        case '1': bitset |= std::bitset<charSize>(0B0001ULL); break;
+                                        case '2': bitset |= std::bitset<charSize>(0B0010ULL); break;
+                                        case '3': bitset |= std::bitset<charSize>(0B0011ULL); break;
+                                        case '4': bitset |= std::bitset<charSize>(0B0100ULL); break;
+                                        case '5': bitset |= std::bitset<charSize>(0B0101ULL); break;
+                                        case '6': bitset |= std::bitset<charSize>(0B0110ULL); break;
+                                        case '7': bitset |= std::bitset<charSize>(0B0111ULL); break;
+                                        case '8': bitset |= std::bitset<charSize>(0B1000ULL); break;
+                                        case '9': bitset |= std::bitset<charSize>(0B1001ULL); break;
+                                        case 'A': bitset |= std::bitset<charSize>(0B1010ULL); break;
+                                        case 'B': bitset |= std::bitset<charSize>(0B1011ULL); break;
+                                        case 'C': bitset |= std::bitset<charSize>(0B1100ULL); break;
+                                        case 'D': bitset |= std::bitset<charSize>(0B1101ULL); break;
+                                        case 'E': bitset |= std::bitset<charSize>(0B1110ULL); break;
+                                        case 'F': bitset |= std::bitset<charSize>(0B1111ULL); break;
                                         default: throw Error(Error::Type::STRING_PARSE_ERROR);
                                     }
 
@@ -1496,22 +1501,22 @@ namespace BinaryText
                                 }
                                 case Case::LOWERCASE: {
                                     switch(*jter) {
-                                        case '0': bitset |= std::bitset<CHAR_BIT>(0B0000ULL); break;
-                                        case '1': bitset |= std::bitset<CHAR_BIT>(0B0001ULL); break;
-                                        case '2': bitset |= std::bitset<CHAR_BIT>(0B0010ULL); break;
-                                        case '3': bitset |= std::bitset<CHAR_BIT>(0B0011ULL); break;
-                                        case '4': bitset |= std::bitset<CHAR_BIT>(0B0100ULL); break;
-                                        case '5': bitset |= std::bitset<CHAR_BIT>(0B0101ULL); break;
-                                        case '6': bitset |= std::bitset<CHAR_BIT>(0B0110ULL); break;
-                                        case '7': bitset |= std::bitset<CHAR_BIT>(0B0111ULL); break;
-                                        case '8': bitset |= std::bitset<CHAR_BIT>(0B1000ULL); break;
-                                        case '9': bitset |= std::bitset<CHAR_BIT>(0B1001ULL); break;
-                                        case 'a': bitset |= std::bitset<CHAR_BIT>(0B1010ULL); break;
-                                        case 'b': bitset |= std::bitset<CHAR_BIT>(0B1011ULL); break;
-                                        case 'c': bitset |= std::bitset<CHAR_BIT>(0B1100ULL); break;
-                                        case 'd': bitset |= std::bitset<CHAR_BIT>(0B1101ULL); break;
-                                        case 'e': bitset |= std::bitset<CHAR_BIT>(0B1110ULL); break;
-                                        case 'f': bitset |= std::bitset<CHAR_BIT>(0B1111ULL); break;
+                                        case '0': bitset |= std::bitset<charSize>(0B0000ULL); break;
+                                        case '1': bitset |= std::bitset<charSize>(0B0001ULL); break;
+                                        case '2': bitset |= std::bitset<charSize>(0B0010ULL); break;
+                                        case '3': bitset |= std::bitset<charSize>(0B0011ULL); break;
+                                        case '4': bitset |= std::bitset<charSize>(0B0100ULL); break;
+                                        case '5': bitset |= std::bitset<charSize>(0B0101ULL); break;
+                                        case '6': bitset |= std::bitset<charSize>(0B0110ULL); break;
+                                        case '7': bitset |= std::bitset<charSize>(0B0111ULL); break;
+                                        case '8': bitset |= std::bitset<charSize>(0B1000ULL); break;
+                                        case '9': bitset |= std::bitset<charSize>(0B1001ULL); break;
+                                        case 'a': bitset |= std::bitset<charSize>(0B1010ULL); break;
+                                        case 'b': bitset |= std::bitset<charSize>(0B1011ULL); break;
+                                        case 'c': bitset |= std::bitset<charSize>(0B1100ULL); break;
+                                        case 'd': bitset |= std::bitset<charSize>(0B1101ULL); break;
+                                        case 'e': bitset |= std::bitset<charSize>(0B1110ULL); break;
+                                        case 'f': bitset |= std::bitset<charSize>(0B1111ULL); break;
                                         default: throw Error(Error::Type::STRING_PARSE_ERROR);
                                     }
 
@@ -1530,7 +1535,7 @@ namespace BinaryText
 
                     switch(counter) {
                         case 2U: break;
-                        case 1U: bitset <<= CHAR_BIT / 2; break;
+                        case 1U: bitset <<= charSize / 2; break;
                         default: UnreachableTerminate();
                     }
 
@@ -1623,7 +1628,7 @@ namespace BinaryText
             std::string _what;
         };
 
-        static_assert(CHAR_BIT == 8, "This Base32 namespace only accepts CHAR_BIT to be 8");
+        static_assert(charSize == 8, "These Base32 functions only works if a char is 8 bits big");
 
         /**
          * @brief Encodes a not-encoded string into a Base32 encoded string.
@@ -1644,13 +1649,13 @@ namespace BinaryText
             }
 
             for(std::string::const_iterator iter = string_.cbegin(); iter != string_.cend(); ++iter) {
-                std::bitset<CHAR_BIT * 5> bitset;
+                std::bitset<charSize * 5> bitset;
                 unsigned int counter(0U);
 
                 for(std::string::const_iterator jter(iter); jter != string_.cend(); ++jter) {
                     counter += 1U;
-                    bitset <<= CHAR_BIT;
-                    bitset |= std::bitset<CHAR_BIT * 5>(std::bitset<CHAR_BIT>(*jter).to_ullong());
+                    bitset <<= charSize;
+                    bitset |= std::bitset<charSize * 5>(std::bitset<charSize>(*jter).to_ullong());
 
                     if(std::next(jter, 1) == string_.cend() or std::next(jter, 1) == std::next(iter, 5)) {
                         iter = jter;
@@ -1662,25 +1667,25 @@ namespace BinaryText
                 switch(counter) {
                     case 5U: counter = 8U; break;
                     case 4U: {
-                        bitset <<= CHAR_BIT;
+                        bitset <<= charSize;
                         counter = 7U;
 
                         break;
                     }
                     case 3U: {
-                        bitset <<= (CHAR_BIT * 2);
+                        bitset <<= (charSize * 2);
                         counter = 5U;
 
                         break;
                     }
                     case 2U: {
-                        bitset <<= (CHAR_BIT * 3);
+                        bitset <<= (charSize * 3);
                         counter = 4U;
 
                         break;
                     }
                     case 1U: {
-                        bitset <<= (CHAR_BIT * 4);
+                        bitset <<= (charSize * 4);
                         counter = 2U;
 
                         break;
@@ -1696,7 +1701,7 @@ namespace BinaryText
                             break;
                         }
                     } else {
-                        std::bitset<(CHAR_BIT * 5) / 8> partialBitset((bitset >> ((CHAR_BIT * 5) - (5 * static_cast<std::size_t>(i)))).to_ullong());
+                        std::bitset<(charSize * 5) / 8> partialBitset((bitset >> ((charSize * 5) - (5 * static_cast<std::size_t>(i)))).to_ullong());
 
                         switch(partialBitset.to_ullong()) {
                             case 0B00000ULL: encodedString.append(1, 'A'); break;
@@ -1761,13 +1766,13 @@ namespace BinaryText
             }
 
             for(typename ByteBuffer<ByteType>::ConstantIterator iter(byteBuffer_.ConstantBegin()); iter != byteBuffer_.ConstantEnd(); ++iter) {
-                std::bitset<CHAR_BIT * 5> bitset;
+                std::bitset<charSize * 5> bitset;
                 unsigned int counter(0U);
 
                 for(typename ByteBuffer<ByteType>::ConstantIterator jter(iter); jter != byteBuffer_.ConstantEnd(); ++jter) {
                     counter += 1U;
-                    bitset <<= CHAR_BIT;
-                    bitset |= std::bitset<CHAR_BIT * 5>(std::bitset<CHAR_BIT>(static_cast<char>(*jter)).to_ullong());
+                    bitset <<= charSize;
+                    bitset |= std::bitset<charSize * 5>(std::bitset<charSize>(static_cast<char>(*jter)).to_ullong());
 
                     if(std::next(jter, 1) == byteBuffer_.ConstantEnd() or std::next(jter, 1) == std::next(iter, 5)) {
                         iter = jter;
@@ -1779,25 +1784,25 @@ namespace BinaryText
                 switch(counter) {
                     case 5U: counter = 8U; break;
                     case 4U: {
-                        bitset <<= CHAR_BIT;
+                        bitset <<= charSize;
                         counter = 7U;
 
                         break;
                     }
                     case 3U: {
-                        bitset <<= (CHAR_BIT * 2);
+                        bitset <<= (charSize * 2);
                         counter = 5U;
 
                         break;
                     }
                     case 2U: {
-                        bitset <<= (CHAR_BIT * 3);
+                        bitset <<= (charSize * 3);
                         counter = 4U;
 
                         break;
                     }
                     case 1U: {
-                        bitset <<= (CHAR_BIT * 4);
+                        bitset <<= (charSize * 4);
                         counter = 2U;
 
                         break;
@@ -1813,7 +1818,7 @@ namespace BinaryText
                             break;
                         }
                     } else {
-                        std::bitset<(CHAR_BIT) * 5 / 8> partialBitset((bitset >> ((CHAR_BIT * 5) - (5 * i))).to_ullong());
+                        std::bitset<(charSize) * 5 / 8> partialBitset((bitset >> ((charSize * 5) - (5 * i))).to_ullong());
 
                         switch(partialBitset.to_ullong()) {
                             case 0B00000ULL: encodedString.append(1, 'A'); break;
@@ -1874,50 +1879,50 @@ namespace BinaryText
             }
 
             for(std::string::const_iterator iter(encodedString_.cbegin()); iter != encodedString_.cend(); ++iter) {
-                std::bitset<CHAR_BIT * 5> bitset;
+                std::bitset<charSize * 5> bitset;
                 unsigned int paddingCounter(0U);
                 unsigned int loopCounter(0U);
 
                 for(std::string::const_iterator jter(iter); jter != encodedString_.cend(); ++jter) {
                     loopCounter += 1U;
-                    bitset <<= (CHAR_BIT * 5) / 8;
+                    bitset <<= (charSize * 5) / 8;
 
                     if(paddingCounter > 0U and *jter != '=') {
                         throw Error(Error::Type::STRING_PARSE_ERROR);
                     } else {
                         switch(*jter) {
-                            case 'A': bitset |= std::bitset<CHAR_BIT * 5>(0B00000ULL); break;
-                            case 'B': bitset |= std::bitset<CHAR_BIT * 5>(0B00001ULL); break;
-                            case 'C': bitset |= std::bitset<CHAR_BIT * 5>(0B00010ULL); break;
-                            case 'D': bitset |= std::bitset<CHAR_BIT * 5>(0B00011ULL); break;
-                            case 'E': bitset |= std::bitset<CHAR_BIT * 5>(0B00100ULL); break;
-                            case 'F': bitset |= std::bitset<CHAR_BIT * 5>(0B00101ULL); break;
-                            case 'G': bitset |= std::bitset<CHAR_BIT * 5>(0B00110ULL); break;
-                            case 'H': bitset |= std::bitset<CHAR_BIT * 5>(0B00111ULL); break;
-                            case 'I': bitset |= std::bitset<CHAR_BIT * 5>(0B01000ULL); break;
-                            case 'J': bitset |= std::bitset<CHAR_BIT * 5>(0B01001ULL); break;
-                            case 'K': bitset |= std::bitset<CHAR_BIT * 5>(0B01010ULL); break;
-                            case 'L': bitset |= std::bitset<CHAR_BIT * 5>(0B01011ULL); break;
-                            case 'M': bitset |= std::bitset<CHAR_BIT * 5>(0B01100ULL); break;
-                            case 'N': bitset |= std::bitset<CHAR_BIT * 5>(0B01101ULL); break;
-                            case 'O': bitset |= std::bitset<CHAR_BIT * 5>(0B01110ULL); break;
-                            case 'P': bitset |= std::bitset<CHAR_BIT * 5>(0B01111ULL); break;
-                            case 'Q': bitset |= std::bitset<CHAR_BIT * 5>(0B10000ULL); break;
-                            case 'R': bitset |= std::bitset<CHAR_BIT * 5>(0B10001ULL); break;
-                            case 'S': bitset |= std::bitset<CHAR_BIT * 5>(0B10010ULL); break;
-                            case 'T': bitset |= std::bitset<CHAR_BIT * 5>(0B10011ULL); break;
-                            case 'U': bitset |= std::bitset<CHAR_BIT * 5>(0B10100ULL); break;
-                            case 'V': bitset |= std::bitset<CHAR_BIT * 5>(0B10101ULL); break;
-                            case 'W': bitset |= std::bitset<CHAR_BIT * 5>(0B10110ULL); break;
-                            case 'X': bitset |= std::bitset<CHAR_BIT * 5>(0B10111ULL); break;
-                            case 'Y': bitset |= std::bitset<CHAR_BIT * 5>(0B11000ULL); break;
-                            case 'Z': bitset |= std::bitset<CHAR_BIT * 5>(0B11001ULL); break;
-                            case '2': bitset |= std::bitset<CHAR_BIT * 5>(0B11010ULL); break;
-                            case '3': bitset |= std::bitset<CHAR_BIT * 5>(0B11011ULL); break;
-                            case '4': bitset |= std::bitset<CHAR_BIT * 5>(0B11100ULL); break;
-                            case '5': bitset |= std::bitset<CHAR_BIT * 5>(0B11101ULL); break;
-                            case '6': bitset |= std::bitset<CHAR_BIT * 5>(0B11110ULL); break;
-                            case '7': bitset |= std::bitset<CHAR_BIT * 5>(0B11111ULL); break;
+                            case 'A': bitset |= std::bitset<charSize * 5>(0B00000ULL); break;
+                            case 'B': bitset |= std::bitset<charSize * 5>(0B00001ULL); break;
+                            case 'C': bitset |= std::bitset<charSize * 5>(0B00010ULL); break;
+                            case 'D': bitset |= std::bitset<charSize * 5>(0B00011ULL); break;
+                            case 'E': bitset |= std::bitset<charSize * 5>(0B00100ULL); break;
+                            case 'F': bitset |= std::bitset<charSize * 5>(0B00101ULL); break;
+                            case 'G': bitset |= std::bitset<charSize * 5>(0B00110ULL); break;
+                            case 'H': bitset |= std::bitset<charSize * 5>(0B00111ULL); break;
+                            case 'I': bitset |= std::bitset<charSize * 5>(0B01000ULL); break;
+                            case 'J': bitset |= std::bitset<charSize * 5>(0B01001ULL); break;
+                            case 'K': bitset |= std::bitset<charSize * 5>(0B01010ULL); break;
+                            case 'L': bitset |= std::bitset<charSize * 5>(0B01011ULL); break;
+                            case 'M': bitset |= std::bitset<charSize * 5>(0B01100ULL); break;
+                            case 'N': bitset |= std::bitset<charSize * 5>(0B01101ULL); break;
+                            case 'O': bitset |= std::bitset<charSize * 5>(0B01110ULL); break;
+                            case 'P': bitset |= std::bitset<charSize * 5>(0B01111ULL); break;
+                            case 'Q': bitset |= std::bitset<charSize * 5>(0B10000ULL); break;
+                            case 'R': bitset |= std::bitset<charSize * 5>(0B10001ULL); break;
+                            case 'S': bitset |= std::bitset<charSize * 5>(0B10010ULL); break;
+                            case 'T': bitset |= std::bitset<charSize * 5>(0B10011ULL); break;
+                            case 'U': bitset |= std::bitset<charSize * 5>(0B10100ULL); break;
+                            case 'V': bitset |= std::bitset<charSize * 5>(0B10101ULL); break;
+                            case 'W': bitset |= std::bitset<charSize * 5>(0B10110ULL); break;
+                            case 'X': bitset |= std::bitset<charSize * 5>(0B10111ULL); break;
+                            case 'Y': bitset |= std::bitset<charSize * 5>(0B11000ULL); break;
+                            case 'Z': bitset |= std::bitset<charSize * 5>(0B11001ULL); break;
+                            case '2': bitset |= std::bitset<charSize * 5>(0B11010ULL); break;
+                            case '3': bitset |= std::bitset<charSize * 5>(0B11011ULL); break;
+                            case '4': bitset |= std::bitset<charSize * 5>(0B11100ULL); break;
+                            case '5': bitset |= std::bitset<charSize * 5>(0B11101ULL); break;
+                            case '6': bitset |= std::bitset<charSize * 5>(0B11110ULL); break;
+                            case '7': bitset |= std::bitset<charSize * 5>(0B11111ULL); break;
                             case '=': paddingCounter += 1U; break;
                             default: throw Error(Error::Type::STRING_PARSE_ERROR);
                         }
@@ -1933,7 +1938,7 @@ namespace BinaryText
                 switch(loopCounter) {
                     case 8U: break;
                     case 7U: {
-                        bitset <<= (CHAR_BIT * 5) / 8;
+                        bitset <<= (charSize * 5) / 8;
 
                         switch(paddingCounter) {
                             case 5U: paddingCounter = 6U; break;
@@ -1946,7 +1951,7 @@ namespace BinaryText
                         break;
                     }
                     case 6U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 2;
+                        bitset <<= ((charSize * 5) / 8) * 2;
 
                         switch(paddingCounter) {
                             case 4U: paddingCounter = 6U; break;
@@ -1958,7 +1963,7 @@ namespace BinaryText
                         break;
                     }
                     case 5U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 3;
+                        bitset <<= ((charSize * 5) / 8) * 3;
 
                         switch(paddingCounter) {
                             case 3U: paddingCounter = 6U; break;
@@ -1970,7 +1975,7 @@ namespace BinaryText
                         break;
                     }
                     case 4U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 4;
+                        bitset <<= ((charSize * 5) / 8) * 4;
 
                         switch(paddingCounter) {
                             case 2U: paddingCounter = 6U; break;
@@ -1981,7 +1986,7 @@ namespace BinaryText
                         break;
                     }
                     case 3U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 5;
+                        bitset <<= ((charSize * 5) / 8) * 5;
 
                         switch(paddingCounter) {
                             case 1U: paddingCounter = 6U; break;
@@ -1991,7 +1996,7 @@ namespace BinaryText
                         break;
                     }
                     case 2U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 6;
+                        bitset <<= ((charSize * 5) / 8) * 6;
 
                         switch(paddingCounter) {
                             case 0U: paddingCounter = 6U; break;
@@ -2006,36 +2011,36 @@ namespace BinaryText
 
                 switch(paddingCounter) {
                     case 0U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> charSize).to_ullong())));
                         decodedString.append(1, static_cast<char>(static_cast<unsigned char>(bitset.to_ullong())));
 
                         break;
                     }
                     case 1U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> charSize).to_ullong())));
 
                         break;
                     }
                     case 3U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())));
 
                         break;
                     }
                     case 4U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong())));
 
                         break;
                     }
-                    case 6U: decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong()))); break;
+                    case 6U: decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong()))); break;
                     default: throw Error(Error::Type::STRING_PARSE_ERROR);
                 }
 
@@ -2083,50 +2088,50 @@ namespace BinaryText
             };
 
             for(std::string::const_iterator iter(encodedString_.cbegin()); iter != encodedString_.cend(); ++iter) {
-                std::bitset<CHAR_BIT * 5> bitset;
+                std::bitset<charSize * 5> bitset;
                 unsigned int paddingCounter(0U);
                 unsigned int loopCounter(0U);
 
                 for(std::string::const_iterator jter(iter); jter != encodedString_.cend(); ++jter) {
                     loopCounter += 1U;
-                    bitset <<= (CHAR_BIT * 5) / 8;
+                    bitset <<= (charSize * 5) / 8;
 
                     if(paddingCounter > 0U and *jter != '=') {
                         throw Error(Error::Type::STRING_PARSE_ERROR);
                     } else {
                         switch(*jter) {
-                            case 'A': bitset |= std::bitset<CHAR_BIT * 5>(0B00000ULL); break;
-                            case 'B': bitset |= std::bitset<CHAR_BIT * 5>(0B00001ULL); break;
-                            case 'C': bitset |= std::bitset<CHAR_BIT * 5>(0B00010ULL); break;
-                            case 'D': bitset |= std::bitset<CHAR_BIT * 5>(0B00011ULL); break;
-                            case 'E': bitset |= std::bitset<CHAR_BIT * 5>(0B00100ULL); break;
-                            case 'F': bitset |= std::bitset<CHAR_BIT * 5>(0B00101ULL); break;
-                            case 'G': bitset |= std::bitset<CHAR_BIT * 5>(0B00110ULL); break;
-                            case 'H': bitset |= std::bitset<CHAR_BIT * 5>(0B00111ULL); break;
-                            case 'I': bitset |= std::bitset<CHAR_BIT * 5>(0B01000ULL); break;
-                            case 'J': bitset |= std::bitset<CHAR_BIT * 5>(0B01001ULL); break;
-                            case 'K': bitset |= std::bitset<CHAR_BIT * 5>(0B01010ULL); break;
-                            case 'L': bitset |= std::bitset<CHAR_BIT * 5>(0B01011ULL); break;
-                            case 'M': bitset |= std::bitset<CHAR_BIT * 5>(0B01100ULL); break;
-                            case 'N': bitset |= std::bitset<CHAR_BIT * 5>(0B01101ULL); break;
-                            case 'O': bitset |= std::bitset<CHAR_BIT * 5>(0B01110ULL); break;
-                            case 'P': bitset |= std::bitset<CHAR_BIT * 5>(0B01111ULL); break;
-                            case 'Q': bitset |= std::bitset<CHAR_BIT * 5>(0B10000ULL); break;
-                            case 'R': bitset |= std::bitset<CHAR_BIT * 5>(0B10001ULL); break;
-                            case 'S': bitset |= std::bitset<CHAR_BIT * 5>(0B10010ULL); break;
-                            case 'T': bitset |= std::bitset<CHAR_BIT * 5>(0B10011ULL); break;
-                            case 'U': bitset |= std::bitset<CHAR_BIT * 5>(0B10100ULL); break;
-                            case 'V': bitset |= std::bitset<CHAR_BIT * 5>(0B10101ULL); break;
-                            case 'W': bitset |= std::bitset<CHAR_BIT * 5>(0B10110ULL); break;
-                            case 'X': bitset |= std::bitset<CHAR_BIT * 5>(0B10111ULL); break;
-                            case 'Y': bitset |= std::bitset<CHAR_BIT * 5>(0B11000ULL); break;
-                            case 'Z': bitset |= std::bitset<CHAR_BIT * 5>(0B11001ULL); break;
-                            case '2': bitset |= std::bitset<CHAR_BIT * 5>(0B11010ULL); break;
-                            case '3': bitset |= std::bitset<CHAR_BIT * 5>(0B11011ULL); break;
-                            case '4': bitset |= std::bitset<CHAR_BIT * 5>(0B11100ULL); break;
-                            case '5': bitset |= std::bitset<CHAR_BIT * 5>(0B11101ULL); break;
-                            case '6': bitset |= std::bitset<CHAR_BIT * 5>(0B11110ULL); break;
-                            case '7': bitset |= std::bitset<CHAR_BIT * 5>(0B11111ULL); break;
+                            case 'A': bitset |= std::bitset<charSize * 5>(0B00000ULL); break;
+                            case 'B': bitset |= std::bitset<charSize * 5>(0B00001ULL); break;
+                            case 'C': bitset |= std::bitset<charSize * 5>(0B00010ULL); break;
+                            case 'D': bitset |= std::bitset<charSize * 5>(0B00011ULL); break;
+                            case 'E': bitset |= std::bitset<charSize * 5>(0B00100ULL); break;
+                            case 'F': bitset |= std::bitset<charSize * 5>(0B00101ULL); break;
+                            case 'G': bitset |= std::bitset<charSize * 5>(0B00110ULL); break;
+                            case 'H': bitset |= std::bitset<charSize * 5>(0B00111ULL); break;
+                            case 'I': bitset |= std::bitset<charSize * 5>(0B01000ULL); break;
+                            case 'J': bitset |= std::bitset<charSize * 5>(0B01001ULL); break;
+                            case 'K': bitset |= std::bitset<charSize * 5>(0B01010ULL); break;
+                            case 'L': bitset |= std::bitset<charSize * 5>(0B01011ULL); break;
+                            case 'M': bitset |= std::bitset<charSize * 5>(0B01100ULL); break;
+                            case 'N': bitset |= std::bitset<charSize * 5>(0B01101ULL); break;
+                            case 'O': bitset |= std::bitset<charSize * 5>(0B01110ULL); break;
+                            case 'P': bitset |= std::bitset<charSize * 5>(0B01111ULL); break;
+                            case 'Q': bitset |= std::bitset<charSize * 5>(0B10000ULL); break;
+                            case 'R': bitset |= std::bitset<charSize * 5>(0B10001ULL); break;
+                            case 'S': bitset |= std::bitset<charSize * 5>(0B10010ULL); break;
+                            case 'T': bitset |= std::bitset<charSize * 5>(0B10011ULL); break;
+                            case 'U': bitset |= std::bitset<charSize * 5>(0B10100ULL); break;
+                            case 'V': bitset |= std::bitset<charSize * 5>(0B10101ULL); break;
+                            case 'W': bitset |= std::bitset<charSize * 5>(0B10110ULL); break;
+                            case 'X': bitset |= std::bitset<charSize * 5>(0B10111ULL); break;
+                            case 'Y': bitset |= std::bitset<charSize * 5>(0B11000ULL); break;
+                            case 'Z': bitset |= std::bitset<charSize * 5>(0B11001ULL); break;
+                            case '2': bitset |= std::bitset<charSize * 5>(0B11010ULL); break;
+                            case '3': bitset |= std::bitset<charSize * 5>(0B11011ULL); break;
+                            case '4': bitset |= std::bitset<charSize * 5>(0B11100ULL); break;
+                            case '5': bitset |= std::bitset<charSize * 5>(0B11101ULL); break;
+                            case '6': bitset |= std::bitset<charSize * 5>(0B11110ULL); break;
+                            case '7': bitset |= std::bitset<charSize * 5>(0B11111ULL); break;
                             case '=': paddingCounter += 1U; break;
                             default: throw Error(Error::Type::STRING_PARSE_ERROR);
                         }
@@ -2142,7 +2147,7 @@ namespace BinaryText
                 switch(loopCounter) {
                     case 8U: break;
                     case 7U: {
-                        bitset <<= (CHAR_BIT * 5) / 8;
+                        bitset <<= (charSize * 5) / 8;
 
                         switch(paddingCounter) {
                             case 5U: paddingCounter = 6U; break;
@@ -2155,7 +2160,7 @@ namespace BinaryText
                         break;
                     }
                     case 6U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 2;
+                        bitset <<= ((charSize * 5) / 8) * 2;
 
                         switch(paddingCounter) {
                             case 4U: paddingCounter = 6U; break;
@@ -2167,7 +2172,7 @@ namespace BinaryText
                         break;
                     }
                     case 5U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 3;
+                        bitset <<= ((charSize * 5) / 8) * 3;
 
                         switch(paddingCounter) {
                             case 3U: paddingCounter = 6U; break;
@@ -2179,7 +2184,7 @@ namespace BinaryText
                         break;
                     }
                     case 4U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 4;
+                        bitset <<= ((charSize * 5) / 8) * 4;
 
                         switch(paddingCounter) {
                             case 2U: paddingCounter = 6U; break;
@@ -2190,7 +2195,7 @@ namespace BinaryText
                         break;
                     }
                     case 3U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 5;
+                        bitset <<= ((charSize * 5) / 8) * 5;
 
                         switch(paddingCounter) {
                             case 1U: paddingCounter = 6U; break;
@@ -2200,7 +2205,7 @@ namespace BinaryText
                         break;
                     }
                     case 2U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 6;
+                        bitset <<= ((charSize * 5) / 8) * 6;
 
                         switch(paddingCounter) {
                             case 0U: paddingCounter = 6U; break;
@@ -2215,36 +2220,36 @@ namespace BinaryText
 
                 switch(paddingCounter) {
                     case 0U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> charSize).to_ullong()));
                         addToByteBuffer(static_cast<unsigned char>(bitset.to_ullong()));
 
                         break;
                     }
                     case 1U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> charSize).to_ullong()));
 
                         break;
                     }
                     case 3U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()));
 
                         break;
                     }
                     case 4U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong()));
 
                         break;
                     }
-                    case 6U: addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong())); break;
+                    case 6U: addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong())); break;
                     default: throw Error(Error::Type::STRING_PARSE_ERROR);
                 }
 
@@ -2319,7 +2324,7 @@ namespace BinaryText
             std::string _what;
         };
 
-        static_assert(CHAR_BIT == 8, "This Base32Hex class only accepts CHAR_BIT to be 8");
+        static_assert(charSize == 8, "These Base32Hex functions only works if a char is 8 bits big");
 
         /**
          * @brief Encodes a not-encoded string into a Base32Hex encoded string.
@@ -2340,13 +2345,13 @@ namespace BinaryText
             }
 
             for(std::string::const_iterator iter = string_.cbegin(); iter != string_.cend(); ++iter) {
-                std::bitset<CHAR_BIT * 5> bitset;
+                std::bitset<charSize * 5> bitset;
                 unsigned int counter(0U);
 
                 for(std::string::const_iterator jter(iter); jter != string_.cend(); ++jter) {
                     counter += 1U;
-                    bitset <<= CHAR_BIT;
-                    bitset |= std::bitset<CHAR_BIT * 5>(std::bitset<CHAR_BIT>(*jter).to_ullong());
+                    bitset <<= charSize;
+                    bitset |= std::bitset<charSize * 5>(std::bitset<charSize>(*jter).to_ullong());
 
                     if(std::next(jter, 1) == string_.cend() or std::next(jter, 1) == std::next(iter, 5)) {
                         iter = jter;
@@ -2358,25 +2363,25 @@ namespace BinaryText
                 switch(counter) {
                     case 5U: counter = 8U; break;
                     case 4U: {
-                        bitset <<= CHAR_BIT;
+                        bitset <<= charSize;
                         counter = 7U;
 
                         break;
                     }
                     case 3U: {
-                        bitset <<= (CHAR_BIT * 2);
+                        bitset <<= (charSize * 2);
                         counter = 5U;
 
                         break;
                     }
                     case 2U: {
-                        bitset <<= (CHAR_BIT * 3);
+                        bitset <<= (charSize * 3);
                         counter = 4U;
 
                         break;
                     }
                     case 1U: {
-                        bitset <<= (CHAR_BIT * 4);
+                        bitset <<= (charSize * 4);
                         counter = 2U;
 
                         break;
@@ -2392,7 +2397,7 @@ namespace BinaryText
                             break;
                         }
                     } else {
-                        std::bitset<(CHAR_BIT * 5) / 8> partialBitset((bitset >> ((CHAR_BIT * 5) - (5 * static_cast<std::size_t>(i)))).to_ullong());
+                        std::bitset<(charSize * 5) / 8> partialBitset((bitset >> ((charSize * 5) - (5 * static_cast<std::size_t>(i)))).to_ullong());
 
                         switch(partialBitset.to_ullong()) {
                             case 0B00000ULL: encodedString.append(1, '0'); break;
@@ -2457,13 +2462,13 @@ namespace BinaryText
             }
 
             for(typename ByteBuffer<ByteType>::ConstantIterator iter(byteBuffer_.ConstantBegin()); iter != byteBuffer_.ConstantEnd(); ++iter) {
-                std::bitset<CHAR_BIT * 5> bitset;
+                std::bitset<charSize * 5> bitset;
                 unsigned int counter(0U);
 
                 for(typename ByteBuffer<ByteType>::ConstantIterator jter(iter); jter != byteBuffer_.ConstantEnd(); ++jter) {
                     counter += 1U;
-                    bitset <<= CHAR_BIT;
-                    bitset |= std::bitset<CHAR_BIT * 5>(std::bitset<CHAR_BIT>(static_cast<char>(*jter)).to_ullong());
+                    bitset <<= charSize;
+                    bitset |= std::bitset<charSize * 5>(std::bitset<charSize>(static_cast<char>(*jter)).to_ullong());
 
                     if(std::next(jter, 1) == byteBuffer_.ConstantEnd() or std::next(jter, 1) == std::next(iter, 5)) {
                         iter = jter;
@@ -2475,25 +2480,25 @@ namespace BinaryText
                 switch(counter) {
                     case 5U: counter = 8U; break;
                     case 4U: {
-                        bitset <<= CHAR_BIT;
+                        bitset <<= charSize;
                         counter = 7U;
 
                         break;
                     }
                     case 3U: {
-                        bitset <<= (CHAR_BIT * 2);
+                        bitset <<= (charSize * 2);
                         counter = 5U;
 
                         break;
                     }
                     case 2U: {
-                        bitset <<= (CHAR_BIT * 3);
+                        bitset <<= (charSize * 3);
                         counter = 4U;
 
                         break;
                     }
                     case 1U: {
-                        bitset <<= (CHAR_BIT * 4);
+                        bitset <<= (charSize * 4);
                         counter = 2U;
 
                         break;
@@ -2509,7 +2514,7 @@ namespace BinaryText
                             break;
                         }
                     } else {
-                        std::bitset<(CHAR_BIT * 5) / 8> partialBitset((bitset >> ((CHAR_BIT * 5) - (5 * i))).to_ullong());
+                        std::bitset<(charSize * 5) / 8> partialBitset((bitset >> ((charSize * 5) - (5 * i))).to_ullong());
 
                         switch(partialBitset.to_ullong()) {
                             case 0B00000ULL: encodedString.append(1, '0'); break;
@@ -2570,50 +2575,50 @@ namespace BinaryText
             }
 
             for(std::string::const_iterator iter(encodedString_.cbegin()); iter != encodedString_.cend(); ++iter) {
-                std::bitset<CHAR_BIT * 5> bitset;
+                std::bitset<charSize * 5> bitset;
                 unsigned int paddingCounter(0U);
                 unsigned int loopCounter(0U);
 
                 for(std::string::const_iterator jter(iter); jter != encodedString_.cend(); ++jter) {
                     loopCounter += 1U;
-                    bitset <<= (CHAR_BIT * 5) / 8;
+                    bitset <<= (charSize * 5) / 8;
 
                     if(paddingCounter > 0U and *jter != '=') {
                         throw Error(Error::Type::STRING_PARSE_ERROR);
                     } else {
                         switch(*jter) {
-                            case '0': bitset |= std::bitset<CHAR_BIT * 5>(0B00000ULL); break;
-                            case '1': bitset |= std::bitset<CHAR_BIT * 5>(0B00001ULL); break;
-                            case '2': bitset |= std::bitset<CHAR_BIT * 5>(0B00010ULL); break;
-                            case '3': bitset |= std::bitset<CHAR_BIT * 5>(0B00011ULL); break;
-                            case '4': bitset |= std::bitset<CHAR_BIT * 5>(0B00100ULL); break;
-                            case '5': bitset |= std::bitset<CHAR_BIT * 5>(0B00101ULL); break;
-                            case '6': bitset |= std::bitset<CHAR_BIT * 5>(0B00110ULL); break;
-                            case '7': bitset |= std::bitset<CHAR_BIT * 5>(0B00111ULL); break;
-                            case '8': bitset |= std::bitset<CHAR_BIT * 5>(0B01000ULL); break;
-                            case '9': bitset |= std::bitset<CHAR_BIT * 5>(0B01001ULL); break;
-                            case 'A': bitset |= std::bitset<CHAR_BIT * 5>(0B01010ULL); break;
-                            case 'B': bitset |= std::bitset<CHAR_BIT * 5>(0B01011ULL); break;
-                            case 'C': bitset |= std::bitset<CHAR_BIT * 5>(0B01100ULL); break;
-                            case 'D': bitset |= std::bitset<CHAR_BIT * 5>(0B01101ULL); break;
-                            case 'E': bitset |= std::bitset<CHAR_BIT * 5>(0B01110ULL); break;
-                            case 'F': bitset |= std::bitset<CHAR_BIT * 5>(0B01111ULL); break;
-                            case 'G': bitset |= std::bitset<CHAR_BIT * 5>(0B10000ULL); break;
-                            case 'H': bitset |= std::bitset<CHAR_BIT * 5>(0B10001ULL); break;
-                            case 'I': bitset |= std::bitset<CHAR_BIT * 5>(0B10010ULL); break;
-                            case 'J': bitset |= std::bitset<CHAR_BIT * 5>(0B10011ULL); break;
-                            case 'K': bitset |= std::bitset<CHAR_BIT * 5>(0B10100ULL); break;
-                            case 'L': bitset |= std::bitset<CHAR_BIT * 5>(0B10101ULL); break;
-                            case 'M': bitset |= std::bitset<CHAR_BIT * 5>(0B10110ULL); break;
-                            case 'N': bitset |= std::bitset<CHAR_BIT * 5>(0B10111ULL); break;
-                            case 'O': bitset |= std::bitset<CHAR_BIT * 5>(0B11000ULL); break;
-                            case 'P': bitset |= std::bitset<CHAR_BIT * 5>(0B11001ULL); break;
-                            case 'Q': bitset |= std::bitset<CHAR_BIT * 5>(0B11010ULL); break;
-                            case 'R': bitset |= std::bitset<CHAR_BIT * 5>(0B11011ULL); break;
-                            case 'S': bitset |= std::bitset<CHAR_BIT * 5>(0B11100ULL); break;
-                            case 'T': bitset |= std::bitset<CHAR_BIT * 5>(0B11101ULL); break;
-                            case 'U': bitset |= std::bitset<CHAR_BIT * 5>(0B11110ULL); break;
-                            case 'V': bitset |= std::bitset<CHAR_BIT * 5>(0B11111ULL); break;
+                            case '0': bitset |= std::bitset<charSize * 5>(0B00000ULL); break;
+                            case '1': bitset |= std::bitset<charSize * 5>(0B00001ULL); break;
+                            case '2': bitset |= std::bitset<charSize * 5>(0B00010ULL); break;
+                            case '3': bitset |= std::bitset<charSize * 5>(0B00011ULL); break;
+                            case '4': bitset |= std::bitset<charSize * 5>(0B00100ULL); break;
+                            case '5': bitset |= std::bitset<charSize * 5>(0B00101ULL); break;
+                            case '6': bitset |= std::bitset<charSize * 5>(0B00110ULL); break;
+                            case '7': bitset |= std::bitset<charSize * 5>(0B00111ULL); break;
+                            case '8': bitset |= std::bitset<charSize * 5>(0B01000ULL); break;
+                            case '9': bitset |= std::bitset<charSize * 5>(0B01001ULL); break;
+                            case 'A': bitset |= std::bitset<charSize * 5>(0B01010ULL); break;
+                            case 'B': bitset |= std::bitset<charSize * 5>(0B01011ULL); break;
+                            case 'C': bitset |= std::bitset<charSize * 5>(0B01100ULL); break;
+                            case 'D': bitset |= std::bitset<charSize * 5>(0B01101ULL); break;
+                            case 'E': bitset |= std::bitset<charSize * 5>(0B01110ULL); break;
+                            case 'F': bitset |= std::bitset<charSize * 5>(0B01111ULL); break;
+                            case 'G': bitset |= std::bitset<charSize * 5>(0B10000ULL); break;
+                            case 'H': bitset |= std::bitset<charSize * 5>(0B10001ULL); break;
+                            case 'I': bitset |= std::bitset<charSize * 5>(0B10010ULL); break;
+                            case 'J': bitset |= std::bitset<charSize * 5>(0B10011ULL); break;
+                            case 'K': bitset |= std::bitset<charSize * 5>(0B10100ULL); break;
+                            case 'L': bitset |= std::bitset<charSize * 5>(0B10101ULL); break;
+                            case 'M': bitset |= std::bitset<charSize * 5>(0B10110ULL); break;
+                            case 'N': bitset |= std::bitset<charSize * 5>(0B10111ULL); break;
+                            case 'O': bitset |= std::bitset<charSize * 5>(0B11000ULL); break;
+                            case 'P': bitset |= std::bitset<charSize * 5>(0B11001ULL); break;
+                            case 'Q': bitset |= std::bitset<charSize * 5>(0B11010ULL); break;
+                            case 'R': bitset |= std::bitset<charSize * 5>(0B11011ULL); break;
+                            case 'S': bitset |= std::bitset<charSize * 5>(0B11100ULL); break;
+                            case 'T': bitset |= std::bitset<charSize * 5>(0B11101ULL); break;
+                            case 'U': bitset |= std::bitset<charSize * 5>(0B11110ULL); break;
+                            case 'V': bitset |= std::bitset<charSize * 5>(0B11111ULL); break;
                             case '=': paddingCounter += 1U; break;
                             default: throw Error(Error::Type::STRING_PARSE_ERROR);
                         }
@@ -2629,7 +2634,7 @@ namespace BinaryText
                 switch(loopCounter) {
                     case 8U: break;
                     case 7U: {
-                        bitset <<= (CHAR_BIT * 5) / 8;
+                        bitset <<= (charSize * 5) / 8;
 
                         switch(paddingCounter) {
                             case 5U: paddingCounter = 6U; break;
@@ -2642,7 +2647,7 @@ namespace BinaryText
                         break;
                     }
                     case 6U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 2;
+                        bitset <<= ((charSize * 5) / 8) * 2;
 
                         switch(paddingCounter) {
                             case 4U: paddingCounter = 6U; break;
@@ -2654,7 +2659,7 @@ namespace BinaryText
                         break;
                     }
                     case 5U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 3;
+                        bitset <<= ((charSize * 5) / 8) * 3;
 
                         switch(paddingCounter) {
                             case 3U: paddingCounter = 6U; break;
@@ -2666,7 +2671,7 @@ namespace BinaryText
                         break;
                     }
                     case 4U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 4;
+                        bitset <<= ((charSize * 5) / 8) * 4;
 
                         switch(paddingCounter) {
                             case 2U: paddingCounter = 6U; break;
@@ -2677,7 +2682,7 @@ namespace BinaryText
                         break;
                     }
                     case 3U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 5;
+                        bitset <<= ((charSize * 5) / 8) * 5;
 
                         switch(paddingCounter) {
                             case 1U: paddingCounter = 6U; break;
@@ -2687,7 +2692,7 @@ namespace BinaryText
                         break;
                     }
                     case 2U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 6;
+                        bitset <<= ((charSize * 5) / 8) * 6;
 
                         switch(paddingCounter) {
                             case 0U: paddingCounter = 6U; break;
@@ -2702,36 +2707,36 @@ namespace BinaryText
 
                 switch(paddingCounter) {
                     case 0U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> charSize).to_ullong())));
                         decodedString.append(1, static_cast<char>(static_cast<unsigned char>(bitset.to_ullong())));
 
                         break;
                     }
                     case 1U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> charSize).to_ullong())));
 
                         break;
                     }
                     case 3U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())));
 
                         break;
                     }
                     case 4U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong())));
 
                         break;
                     }
-                    case 6U: decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong()))); break;
+                    case 6U: decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong()))); break;
                     default: throw Error(Error::Type::STRING_PARSE_ERROR);
                 }
 
@@ -2779,50 +2784,50 @@ namespace BinaryText
             };
 
             for(std::string::const_iterator iter(encodedString_.cbegin()); iter != encodedString_.cend(); ++iter) {
-                std::bitset<CHAR_BIT * 5> bitset;
+                std::bitset<charSize * 5> bitset;
                 unsigned int paddingCounter(0U);
                 unsigned int loopCounter(0U);
 
                 for(std::string::const_iterator jter(iter); jter != encodedString_.cend(); ++jter) {
                     loopCounter += 1U;
-                    bitset <<= (CHAR_BIT * 5) / 8;
+                    bitset <<= (charSize * 5) / 8;
 
                     if(paddingCounter > 0U and *jter != '=') {
                         throw Error(Error::Type::STRING_PARSE_ERROR);
                     } else {
                         switch(*jter) {
-                            case '0': bitset |= std::bitset<CHAR_BIT * 5>(0B00000ULL); break;
-                            case '1': bitset |= std::bitset<CHAR_BIT * 5>(0B00001ULL); break;
-                            case '2': bitset |= std::bitset<CHAR_BIT * 5>(0B00010ULL); break;
-                            case '3': bitset |= std::bitset<CHAR_BIT * 5>(0B00011ULL); break;
-                            case '4': bitset |= std::bitset<CHAR_BIT * 5>(0B00100ULL); break;
-                            case '5': bitset |= std::bitset<CHAR_BIT * 5>(0B00101ULL); break;
-                            case '6': bitset |= std::bitset<CHAR_BIT * 5>(0B00110ULL); break;
-                            case '7': bitset |= std::bitset<CHAR_BIT * 5>(0B00111ULL); break;
-                            case '8': bitset |= std::bitset<CHAR_BIT * 5>(0B01000ULL); break;
-                            case '9': bitset |= std::bitset<CHAR_BIT * 5>(0B01001ULL); break;
-                            case 'A': bitset |= std::bitset<CHAR_BIT * 5>(0B01010ULL); break;
-                            case 'B': bitset |= std::bitset<CHAR_BIT * 5>(0B01011ULL); break;
-                            case 'C': bitset |= std::bitset<CHAR_BIT * 5>(0B01100ULL); break;
-                            case 'D': bitset |= std::bitset<CHAR_BIT * 5>(0B01101ULL); break;
-                            case 'E': bitset |= std::bitset<CHAR_BIT * 5>(0B01110ULL); break;
-                            case 'F': bitset |= std::bitset<CHAR_BIT * 5>(0B01111ULL); break;
-                            case 'G': bitset |= std::bitset<CHAR_BIT * 5>(0B10000ULL); break;
-                            case 'H': bitset |= std::bitset<CHAR_BIT * 5>(0B10001ULL); break;
-                            case 'I': bitset |= std::bitset<CHAR_BIT * 5>(0B10010ULL); break;
-                            case 'J': bitset |= std::bitset<CHAR_BIT * 5>(0B10011ULL); break;
-                            case 'K': bitset |= std::bitset<CHAR_BIT * 5>(0B10100ULL); break;
-                            case 'L': bitset |= std::bitset<CHAR_BIT * 5>(0B10101ULL); break;
-                            case 'M': bitset |= std::bitset<CHAR_BIT * 5>(0B10110ULL); break;
-                            case 'N': bitset |= std::bitset<CHAR_BIT * 5>(0B10111ULL); break;
-                            case 'O': bitset |= std::bitset<CHAR_BIT * 5>(0B11000ULL); break;
-                            case 'P': bitset |= std::bitset<CHAR_BIT * 5>(0B11001ULL); break;
-                            case 'Q': bitset |= std::bitset<CHAR_BIT * 5>(0B11010ULL); break;
-                            case 'R': bitset |= std::bitset<CHAR_BIT * 5>(0B11011ULL); break;
-                            case 'S': bitset |= std::bitset<CHAR_BIT * 5>(0B11100ULL); break;
-                            case 'T': bitset |= std::bitset<CHAR_BIT * 5>(0B11101ULL); break;
-                            case 'U': bitset |= std::bitset<CHAR_BIT * 5>(0B11110ULL); break;
-                            case 'V': bitset |= std::bitset<CHAR_BIT * 5>(0B11111ULL); break;
+                            case '0': bitset |= std::bitset<charSize * 5>(0B00000ULL); break;
+                            case '1': bitset |= std::bitset<charSize * 5>(0B00001ULL); break;
+                            case '2': bitset |= std::bitset<charSize * 5>(0B00010ULL); break;
+                            case '3': bitset |= std::bitset<charSize * 5>(0B00011ULL); break;
+                            case '4': bitset |= std::bitset<charSize * 5>(0B00100ULL); break;
+                            case '5': bitset |= std::bitset<charSize * 5>(0B00101ULL); break;
+                            case '6': bitset |= std::bitset<charSize * 5>(0B00110ULL); break;
+                            case '7': bitset |= std::bitset<charSize * 5>(0B00111ULL); break;
+                            case '8': bitset |= std::bitset<charSize * 5>(0B01000ULL); break;
+                            case '9': bitset |= std::bitset<charSize * 5>(0B01001ULL); break;
+                            case 'A': bitset |= std::bitset<charSize * 5>(0B01010ULL); break;
+                            case 'B': bitset |= std::bitset<charSize * 5>(0B01011ULL); break;
+                            case 'C': bitset |= std::bitset<charSize * 5>(0B01100ULL); break;
+                            case 'D': bitset |= std::bitset<charSize * 5>(0B01101ULL); break;
+                            case 'E': bitset |= std::bitset<charSize * 5>(0B01110ULL); break;
+                            case 'F': bitset |= std::bitset<charSize * 5>(0B01111ULL); break;
+                            case 'G': bitset |= std::bitset<charSize * 5>(0B10000ULL); break;
+                            case 'H': bitset |= std::bitset<charSize * 5>(0B10001ULL); break;
+                            case 'I': bitset |= std::bitset<charSize * 5>(0B10010ULL); break;
+                            case 'J': bitset |= std::bitset<charSize * 5>(0B10011ULL); break;
+                            case 'K': bitset |= std::bitset<charSize * 5>(0B10100ULL); break;
+                            case 'L': bitset |= std::bitset<charSize * 5>(0B10101ULL); break;
+                            case 'M': bitset |= std::bitset<charSize * 5>(0B10110ULL); break;
+                            case 'N': bitset |= std::bitset<charSize * 5>(0B10111ULL); break;
+                            case 'O': bitset |= std::bitset<charSize * 5>(0B11000ULL); break;
+                            case 'P': bitset |= std::bitset<charSize * 5>(0B11001ULL); break;
+                            case 'Q': bitset |= std::bitset<charSize * 5>(0B11010ULL); break;
+                            case 'R': bitset |= std::bitset<charSize * 5>(0B11011ULL); break;
+                            case 'S': bitset |= std::bitset<charSize * 5>(0B11100ULL); break;
+                            case 'T': bitset |= std::bitset<charSize * 5>(0B11101ULL); break;
+                            case 'U': bitset |= std::bitset<charSize * 5>(0B11110ULL); break;
+                            case 'V': bitset |= std::bitset<charSize * 5>(0B11111ULL); break;
                             case '=': paddingCounter += 1U; break;
                             default: throw Error(Error::Type::STRING_PARSE_ERROR);
                         }
@@ -2838,7 +2843,7 @@ namespace BinaryText
                 switch(loopCounter) {
                     case 8U: break;
                     case 7U: {
-                        bitset <<= (CHAR_BIT * 5) / 8;
+                        bitset <<= (charSize * 5) / 8;
 
                         switch(paddingCounter) {
                             case 5U: paddingCounter = 6U; break;
@@ -2851,7 +2856,7 @@ namespace BinaryText
                         break;
                     }
                     case 6U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 2;
+                        bitset <<= ((charSize * 5) / 8) * 2;
 
                         switch(paddingCounter) {
                             case 4U: paddingCounter = 6U; break;
@@ -2863,7 +2868,7 @@ namespace BinaryText
                         break;
                     }
                     case 5U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 3;
+                        bitset <<= ((charSize * 5) / 8) * 3;
 
                         switch(paddingCounter) {
                             case 3U: paddingCounter = 6U; break;
@@ -2875,7 +2880,7 @@ namespace BinaryText
                         break;
                     }
                     case 4U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 4;
+                        bitset <<= ((charSize * 5) / 8) * 4;
 
                         switch(paddingCounter) {
                             case 2U: paddingCounter = 6U; break;
@@ -2886,7 +2891,7 @@ namespace BinaryText
                         break;
                     }
                     case 3U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 5;
+                        bitset <<= ((charSize * 5) / 8) * 5;
 
                         switch(paddingCounter) {
                             case 1U: paddingCounter = 6U; break;
@@ -2896,7 +2901,7 @@ namespace BinaryText
                         break;
                     }
                     case 2U: {
-                        bitset <<= ((CHAR_BIT * 5) / 8) * 6;
+                        bitset <<= ((charSize * 5) / 8) * 6;
 
                         switch(paddingCounter) {
                             case 0U: paddingCounter = 6U; break;
@@ -2911,36 +2916,36 @@ namespace BinaryText
 
                 switch(paddingCounter) {
                     case 0U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> charSize).to_ullong()));
                         addToByteBuffer(static_cast<unsigned char>(bitset.to_ullong()));
 
                         break;
                     }
                     case 1U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> charSize).to_ullong()));
 
                         break;
                     }
                     case 3U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()));
 
                         break;
                     }
                     case 4U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong()));
 
                         break;
                     }
-                    case 6U: addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 4)).to_ullong())); break;
+                    case 6U: addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 4)).to_ullong())); break;
                     default: throw Error(Error::Type::STRING_PARSE_ERROR);
                 }
 
@@ -3015,7 +3020,7 @@ namespace BinaryText
             std::string _what;
         };
 
-        static_assert(CHAR_BIT == 8, "This Base64 namespace only accepts CHAR_BIT to be 8");
+        static_assert(charSize == 8, "These Base64 functions only works if a char is 8 bits big");
 
         /**
          * @brief Encodes a not-encoded string into a Base64 encoded string.
@@ -3036,13 +3041,13 @@ namespace BinaryText
             }
 
             for(std::string::const_iterator iter = string_.cbegin(); iter != string_.cend(); ++iter) {
-                std::bitset<CHAR_BIT * 3> bitset;
+                std::bitset<charSize * 3> bitset;
                 unsigned int counter(0U);
 
                 for(std::string::const_iterator jter(iter); jter != string_.cend(); ++jter) {
                     counter += 1U;
-                    bitset <<= CHAR_BIT;
-                    bitset |= std::bitset<CHAR_BIT * 3>(std::bitset<CHAR_BIT>(*jter).to_ullong());
+                    bitset <<= charSize;
+                    bitset |= std::bitset<charSize * 3>(std::bitset<charSize>(*jter).to_ullong());
 
                     if(std::next(jter, 1) == string_.cend() or std::next(jter, 1) == std::next(iter, 3)) {
                         iter = jter;
@@ -3054,13 +3059,13 @@ namespace BinaryText
                 switch(counter) {
                     case 3U: counter = 4U; break;
                     case 2U: {
-                        bitset <<= CHAR_BIT;
+                        bitset <<= charSize;
                         counter = 3U;
 
                         break;
                     }
                     case 1U: {
-                        bitset <<= CHAR_BIT * 2;
+                        bitset <<= charSize * 2;
                         counter = 2U;
 
                         break;
@@ -3076,7 +3081,7 @@ namespace BinaryText
                             break;
                         }
                     } else {
-                        std::bitset<(CHAR_BIT * 3) / 4> partialBitset((bitset >> ((CHAR_BIT * 3) - (6 * i))).to_ullong());
+                        std::bitset<(charSize * 3) / 4> partialBitset((bitset >> ((charSize * 3) - (6 * i))).to_ullong());
 
                         switch(partialBitset.to_ullong()) {
                             case 0B000000ULL: encodedString.append(1, 'A'); break;
@@ -3173,13 +3178,13 @@ namespace BinaryText
             }
 
             for(typename ByteBuffer<ByteType>::ConstantIterator iter(byteBuffer_.ConstantBegin()); iter != byteBuffer_.ConstantEnd(); ++iter) {
-                std::bitset<CHAR_BIT * 3> bitset;
+                std::bitset<charSize * 3> bitset;
                 unsigned int counter(0U);
 
                 for(typename ByteBuffer<ByteType>::ConstantIterator jter(iter); jter != byteBuffer_.ConstantEnd(); ++jter) {
                     counter += 1U;
-                    bitset <<= CHAR_BIT;
-                    bitset |= std::bitset<CHAR_BIT * 3>(std::bitset<CHAR_BIT>(static_cast<char>(*jter)).to_ullong());
+                    bitset <<= charSize;
+                    bitset |= std::bitset<charSize * 3>(std::bitset<charSize>(static_cast<char>(*jter)).to_ullong());
 
                     if(std::next(jter, 1) == byteBuffer_.ConstantEnd() or std::next(jter, 1) == std::next(iter, 3)) {
                         iter = jter;
@@ -3191,13 +3196,13 @@ namespace BinaryText
                 switch(counter) {
                     case 3U: counter = 4U; break;
                     case 2U: {
-                        bitset <<= CHAR_BIT;
+                        bitset <<= charSize;
                         counter = 3U;
 
                         break;
                     }
                     case 1U: {
-                        bitset <<= CHAR_BIT * 2;
+                        bitset <<= charSize * 2;
                         counter = 2U;
 
                         break;
@@ -3213,7 +3218,7 @@ namespace BinaryText
                             break;
                         }
                     } else {
-                        std::bitset<(CHAR_BIT * 3) / 4> partialBitset((bitset >> ((CHAR_BIT * 3) - (6 * i))).to_ullong());
+                        std::bitset<(charSize * 3) / 4> partialBitset((bitset >> ((charSize * 3) - (6 * i))).to_ullong());
 
                         switch(partialBitset.to_ullong()) {
                             case 0B000000ULL: encodedString.append(1, 'A'); break;
@@ -3306,82 +3311,82 @@ namespace BinaryText
             }
 
             for(std::string::const_iterator iter(encodedString_.cbegin()); iter != encodedString_.cend(); ++iter) {
-                std::bitset<CHAR_BIT * 3> bitset;
+                std::bitset<charSize * 3> bitset;
                 unsigned int paddingCounter(0U);
                 unsigned int loopCounter(0U);
 
                 for(std::string::const_iterator jter(iter); jter != encodedString_.cend(); ++jter) {
                     loopCounter += 1U;
-                    bitset <<= (CHAR_BIT * 3) / 4;
+                    bitset <<= (charSize * 3) / 4;
 
                     if(paddingCounter > 0U and *jter != '=') {
                         throw Error(Error::Type::STRING_PARSE_ERROR);
                     } else {
                         switch(*jter) {
-                            case 'A': bitset |= std::bitset<CHAR_BIT * 3>(0B000000ULL); break;
-                            case 'B': bitset |= std::bitset<CHAR_BIT * 3>(0B000001ULL); break;
-                            case 'C': bitset |= std::bitset<CHAR_BIT * 3>(0B000010ULL); break;
-                            case 'D': bitset |= std::bitset<CHAR_BIT * 3>(0B000011ULL); break;
-                            case 'E': bitset |= std::bitset<CHAR_BIT * 3>(0B000100ULL); break;
-                            case 'F': bitset |= std::bitset<CHAR_BIT * 3>(0B000101ULL); break;
-                            case 'G': bitset |= std::bitset<CHAR_BIT * 3>(0B000110ULL); break;
-                            case 'H': bitset |= std::bitset<CHAR_BIT * 3>(0B000111ULL); break;
-                            case 'I': bitset |= std::bitset<CHAR_BIT * 3>(0B001000ULL); break;
-                            case 'J': bitset |= std::bitset<CHAR_BIT * 3>(0B001001ULL); break;
-                            case 'K': bitset |= std::bitset<CHAR_BIT * 3>(0B001010ULL); break;
-                            case 'L': bitset |= std::bitset<CHAR_BIT * 3>(0B001011ULL); break;
-                            case 'M': bitset |= std::bitset<CHAR_BIT * 3>(0B001100ULL); break;
-                            case 'N': bitset |= std::bitset<CHAR_BIT * 3>(0B001101ULL); break;
-                            case 'O': bitset |= std::bitset<CHAR_BIT * 3>(0B001110ULL); break;
-                            case 'P': bitset |= std::bitset<CHAR_BIT * 3>(0B001111ULL); break;
-                            case 'Q': bitset |= std::bitset<CHAR_BIT * 3>(0B010000ULL); break;
-                            case 'R': bitset |= std::bitset<CHAR_BIT * 3>(0B010001ULL); break;
-                            case 'S': bitset |= std::bitset<CHAR_BIT * 3>(0B010010ULL); break;
-                            case 'T': bitset |= std::bitset<CHAR_BIT * 3>(0B010011ULL); break;
-                            case 'U': bitset |= std::bitset<CHAR_BIT * 3>(0B010100ULL); break;
-                            case 'V': bitset |= std::bitset<CHAR_BIT * 3>(0B010101ULL); break;
-                            case 'W': bitset |= std::bitset<CHAR_BIT * 3>(0B010110ULL); break;
-                            case 'X': bitset |= std::bitset<CHAR_BIT * 3>(0B010111ULL); break;
-                            case 'Y': bitset |= std::bitset<CHAR_BIT * 3>(0B011000ULL); break;
-                            case 'Z': bitset |= std::bitset<CHAR_BIT * 3>(0B011001ULL); break;
-                            case 'a': bitset |= std::bitset<CHAR_BIT * 3>(0B011010ULL); break;
-                            case 'b': bitset |= std::bitset<CHAR_BIT * 3>(0B011011ULL); break;
-                            case 'c': bitset |= std::bitset<CHAR_BIT * 3>(0B011100ULL); break;
-                            case 'd': bitset |= std::bitset<CHAR_BIT * 3>(0B011101ULL); break;
-                            case 'e': bitset |= std::bitset<CHAR_BIT * 3>(0B011110ULL); break;
-                            case 'f': bitset |= std::bitset<CHAR_BIT * 3>(0B011111ULL); break;
-                            case 'g': bitset |= std::bitset<CHAR_BIT * 3>(0B100000ULL); break;
-                            case 'h': bitset |= std::bitset<CHAR_BIT * 3>(0B100001ULL); break;
-                            case 'i': bitset |= std::bitset<CHAR_BIT * 3>(0B100010ULL); break;
-                            case 'j': bitset |= std::bitset<CHAR_BIT * 3>(0B100011ULL); break;
-                            case 'k': bitset |= std::bitset<CHAR_BIT * 3>(0B100100ULL); break;
-                            case 'l': bitset |= std::bitset<CHAR_BIT * 3>(0B100101ULL); break;
-                            case 'm': bitset |= std::bitset<CHAR_BIT * 3>(0B100110ULL); break;
-                            case 'n': bitset |= std::bitset<CHAR_BIT * 3>(0B100111ULL); break;
-                            case 'o': bitset |= std::bitset<CHAR_BIT * 3>(0B101000ULL); break;
-                            case 'p': bitset |= std::bitset<CHAR_BIT * 3>(0B101001ULL); break;
-                            case 'q': bitset |= std::bitset<CHAR_BIT * 3>(0B101010ULL); break;
-                            case 'r': bitset |= std::bitset<CHAR_BIT * 3>(0B101011ULL); break;
-                            case 's': bitset |= std::bitset<CHAR_BIT * 3>(0B101100ULL); break;
-                            case 't': bitset |= std::bitset<CHAR_BIT * 3>(0B101101ULL); break;
-                            case 'u': bitset |= std::bitset<CHAR_BIT * 3>(0B101110ULL); break;
-                            case 'v': bitset |= std::bitset<CHAR_BIT * 3>(0B101111ULL); break;
-                            case 'w': bitset |= std::bitset<CHAR_BIT * 3>(0B110000ULL); break;
-                            case 'x': bitset |= std::bitset<CHAR_BIT * 3>(0B110001ULL); break;
-                            case 'y': bitset |= std::bitset<CHAR_BIT * 3>(0B110010ULL); break;
-                            case 'z': bitset |= std::bitset<CHAR_BIT * 3>(0B110011ULL); break;
-                            case '0': bitset |= std::bitset<CHAR_BIT * 3>(0B110100ULL); break;
-                            case '1': bitset |= std::bitset<CHAR_BIT * 3>(0B110101ULL); break;
-                            case '2': bitset |= std::bitset<CHAR_BIT * 3>(0B110110ULL); break;
-                            case '3': bitset |= std::bitset<CHAR_BIT * 3>(0B110111ULL); break;
-                            case '4': bitset |= std::bitset<CHAR_BIT * 3>(0B111000ULL); break;
-                            case '5': bitset |= std::bitset<CHAR_BIT * 3>(0B111001ULL); break;
-                            case '6': bitset |= std::bitset<CHAR_BIT * 3>(0B111010ULL); break;
-                            case '7': bitset |= std::bitset<CHAR_BIT * 3>(0B111011ULL); break;
-                            case '8': bitset |= std::bitset<CHAR_BIT * 3>(0B111100ULL); break;
-                            case '9': bitset |= std::bitset<CHAR_BIT * 3>(0B111101ULL); break;
-                            case '+': bitset |= std::bitset<CHAR_BIT * 3>(0B111110ULL); break;
-                            case '/': bitset |= std::bitset<CHAR_BIT * 3>(0B111111ULL); break;
+                            case 'A': bitset |= std::bitset<charSize * 3>(0B000000ULL); break;
+                            case 'B': bitset |= std::bitset<charSize * 3>(0B000001ULL); break;
+                            case 'C': bitset |= std::bitset<charSize * 3>(0B000010ULL); break;
+                            case 'D': bitset |= std::bitset<charSize * 3>(0B000011ULL); break;
+                            case 'E': bitset |= std::bitset<charSize * 3>(0B000100ULL); break;
+                            case 'F': bitset |= std::bitset<charSize * 3>(0B000101ULL); break;
+                            case 'G': bitset |= std::bitset<charSize * 3>(0B000110ULL); break;
+                            case 'H': bitset |= std::bitset<charSize * 3>(0B000111ULL); break;
+                            case 'I': bitset |= std::bitset<charSize * 3>(0B001000ULL); break;
+                            case 'J': bitset |= std::bitset<charSize * 3>(0B001001ULL); break;
+                            case 'K': bitset |= std::bitset<charSize * 3>(0B001010ULL); break;
+                            case 'L': bitset |= std::bitset<charSize * 3>(0B001011ULL); break;
+                            case 'M': bitset |= std::bitset<charSize * 3>(0B001100ULL); break;
+                            case 'N': bitset |= std::bitset<charSize * 3>(0B001101ULL); break;
+                            case 'O': bitset |= std::bitset<charSize * 3>(0B001110ULL); break;
+                            case 'P': bitset |= std::bitset<charSize * 3>(0B001111ULL); break;
+                            case 'Q': bitset |= std::bitset<charSize * 3>(0B010000ULL); break;
+                            case 'R': bitset |= std::bitset<charSize * 3>(0B010001ULL); break;
+                            case 'S': bitset |= std::bitset<charSize * 3>(0B010010ULL); break;
+                            case 'T': bitset |= std::bitset<charSize * 3>(0B010011ULL); break;
+                            case 'U': bitset |= std::bitset<charSize * 3>(0B010100ULL); break;
+                            case 'V': bitset |= std::bitset<charSize * 3>(0B010101ULL); break;
+                            case 'W': bitset |= std::bitset<charSize * 3>(0B010110ULL); break;
+                            case 'X': bitset |= std::bitset<charSize * 3>(0B010111ULL); break;
+                            case 'Y': bitset |= std::bitset<charSize * 3>(0B011000ULL); break;
+                            case 'Z': bitset |= std::bitset<charSize * 3>(0B011001ULL); break;
+                            case 'a': bitset |= std::bitset<charSize * 3>(0B011010ULL); break;
+                            case 'b': bitset |= std::bitset<charSize * 3>(0B011011ULL); break;
+                            case 'c': bitset |= std::bitset<charSize * 3>(0B011100ULL); break;
+                            case 'd': bitset |= std::bitset<charSize * 3>(0B011101ULL); break;
+                            case 'e': bitset |= std::bitset<charSize * 3>(0B011110ULL); break;
+                            case 'f': bitset |= std::bitset<charSize * 3>(0B011111ULL); break;
+                            case 'g': bitset |= std::bitset<charSize * 3>(0B100000ULL); break;
+                            case 'h': bitset |= std::bitset<charSize * 3>(0B100001ULL); break;
+                            case 'i': bitset |= std::bitset<charSize * 3>(0B100010ULL); break;
+                            case 'j': bitset |= std::bitset<charSize * 3>(0B100011ULL); break;
+                            case 'k': bitset |= std::bitset<charSize * 3>(0B100100ULL); break;
+                            case 'l': bitset |= std::bitset<charSize * 3>(0B100101ULL); break;
+                            case 'm': bitset |= std::bitset<charSize * 3>(0B100110ULL); break;
+                            case 'n': bitset |= std::bitset<charSize * 3>(0B100111ULL); break;
+                            case 'o': bitset |= std::bitset<charSize * 3>(0B101000ULL); break;
+                            case 'p': bitset |= std::bitset<charSize * 3>(0B101001ULL); break;
+                            case 'q': bitset |= std::bitset<charSize * 3>(0B101010ULL); break;
+                            case 'r': bitset |= std::bitset<charSize * 3>(0B101011ULL); break;
+                            case 's': bitset |= std::bitset<charSize * 3>(0B101100ULL); break;
+                            case 't': bitset |= std::bitset<charSize * 3>(0B101101ULL); break;
+                            case 'u': bitset |= std::bitset<charSize * 3>(0B101110ULL); break;
+                            case 'v': bitset |= std::bitset<charSize * 3>(0B101111ULL); break;
+                            case 'w': bitset |= std::bitset<charSize * 3>(0B110000ULL); break;
+                            case 'x': bitset |= std::bitset<charSize * 3>(0B110001ULL); break;
+                            case 'y': bitset |= std::bitset<charSize * 3>(0B110010ULL); break;
+                            case 'z': bitset |= std::bitset<charSize * 3>(0B110011ULL); break;
+                            case '0': bitset |= std::bitset<charSize * 3>(0B110100ULL); break;
+                            case '1': bitset |= std::bitset<charSize * 3>(0B110101ULL); break;
+                            case '2': bitset |= std::bitset<charSize * 3>(0B110110ULL); break;
+                            case '3': bitset |= std::bitset<charSize * 3>(0B110111ULL); break;
+                            case '4': bitset |= std::bitset<charSize * 3>(0B111000ULL); break;
+                            case '5': bitset |= std::bitset<charSize * 3>(0B111001ULL); break;
+                            case '6': bitset |= std::bitset<charSize * 3>(0B111010ULL); break;
+                            case '7': bitset |= std::bitset<charSize * 3>(0B111011ULL); break;
+                            case '8': bitset |= std::bitset<charSize * 3>(0B111100ULL); break;
+                            case '9': bitset |= std::bitset<charSize * 3>(0B111101ULL); break;
+                            case '+': bitset |= std::bitset<charSize * 3>(0B111110ULL); break;
+                            case '/': bitset |= std::bitset<charSize * 3>(0B111111ULL); break;
                             case '=': paddingCounter += 1U; break;
                             default: throw Error(Error::Type::STRING_PARSE_ERROR);
                         }
@@ -3397,7 +3402,7 @@ namespace BinaryText
                 switch(loopCounter) {
                     case 4U: break;
                     case 3U: {
-                        bitset <<= (CHAR_BIT * 3) / 4;
+                        bitset <<= (charSize * 3) / 4;
 
                         switch(paddingCounter) {
                             case 1U: paddingCounter = 2U; break;
@@ -3408,7 +3413,7 @@ namespace BinaryText
                         break;
                     }
                     case 2U: {
-                        bitset <<= ((CHAR_BIT * 3) / 4) * 2;
+                        bitset <<= ((charSize * 3) / 4) * 2;
 
                         switch(paddingCounter) {
                             case 0U: paddingCounter = 2U; break;
@@ -3423,19 +3428,19 @@ namespace BinaryText
 
                 switch(paddingCounter) {
                     case 0U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> charSize).to_ullong())));
                         decodedString.append(1, static_cast<char>(static_cast<unsigned char>(bitset.to_ullong())));
 
                         break;
                     }
                     case 1U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> charSize).to_ullong())));
 
                         break;
                     }
-                    case 2U: decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()))); break;
+                    case 2U: decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()))); break;
                     default: throw Error(Error::Type::STRING_PARSE_ERROR);
                 }
 
@@ -3483,82 +3488,82 @@ namespace BinaryText
             };
 
             for(std::string::const_iterator iter(encodedString_.cbegin()); iter != encodedString_.cend(); ++iter) {
-                std::bitset<CHAR_BIT * 3> bitset;
+                std::bitset<charSize * 3> bitset;
                 unsigned int paddingCounter(0U);
                 unsigned int loopCounter(0U);
 
                 for(std::string::const_iterator jter(iter); jter != encodedString_.cend(); ++jter) {
                     loopCounter += 1U;
-                    bitset <<= (CHAR_BIT * 3) / 4;
+                    bitset <<= (charSize * 3) / 4;
 
                     if(paddingCounter > 0U and *jter != '=') {
                         throw Error(Error::Type::STRING_PARSE_ERROR);
                     } else {
                         switch(*jter) {
-                            case 'A': bitset |= std::bitset<CHAR_BIT * 3>(0B000000ULL); break;
-                            case 'B': bitset |= std::bitset<CHAR_BIT * 3>(0B000001ULL); break;
-                            case 'C': bitset |= std::bitset<CHAR_BIT * 3>(0B000010ULL); break;
-                            case 'D': bitset |= std::bitset<CHAR_BIT * 3>(0B000011ULL); break;
-                            case 'E': bitset |= std::bitset<CHAR_BIT * 3>(0B000100ULL); break;
-                            case 'F': bitset |= std::bitset<CHAR_BIT * 3>(0B000101ULL); break;
-                            case 'G': bitset |= std::bitset<CHAR_BIT * 3>(0B000110ULL); break;
-                            case 'H': bitset |= std::bitset<CHAR_BIT * 3>(0B000111ULL); break;
-                            case 'I': bitset |= std::bitset<CHAR_BIT * 3>(0B001000ULL); break;
-                            case 'J': bitset |= std::bitset<CHAR_BIT * 3>(0B001001ULL); break;
-                            case 'K': bitset |= std::bitset<CHAR_BIT * 3>(0B001010ULL); break;
-                            case 'L': bitset |= std::bitset<CHAR_BIT * 3>(0B001011ULL); break;
-                            case 'M': bitset |= std::bitset<CHAR_BIT * 3>(0B001100ULL); break;
-                            case 'N': bitset |= std::bitset<CHAR_BIT * 3>(0B001101ULL); break;
-                            case 'O': bitset |= std::bitset<CHAR_BIT * 3>(0B001110ULL); break;
-                            case 'P': bitset |= std::bitset<CHAR_BIT * 3>(0B001111ULL); break;
-                            case 'Q': bitset |= std::bitset<CHAR_BIT * 3>(0B010000ULL); break;
-                            case 'R': bitset |= std::bitset<CHAR_BIT * 3>(0B010001ULL); break;
-                            case 'S': bitset |= std::bitset<CHAR_BIT * 3>(0B010010ULL); break;
-                            case 'T': bitset |= std::bitset<CHAR_BIT * 3>(0B010011ULL); break;
-                            case 'U': bitset |= std::bitset<CHAR_BIT * 3>(0B010100ULL); break;
-                            case 'V': bitset |= std::bitset<CHAR_BIT * 3>(0B010101ULL); break;
-                            case 'W': bitset |= std::bitset<CHAR_BIT * 3>(0B010110ULL); break;
-                            case 'X': bitset |= std::bitset<CHAR_BIT * 3>(0B010111ULL); break;
-                            case 'Y': bitset |= std::bitset<CHAR_BIT * 3>(0B011000ULL); break;
-                            case 'Z': bitset |= std::bitset<CHAR_BIT * 3>(0B011001ULL); break;
-                            case 'a': bitset |= std::bitset<CHAR_BIT * 3>(0B011010ULL); break;
-                            case 'b': bitset |= std::bitset<CHAR_BIT * 3>(0B011011ULL); break;
-                            case 'c': bitset |= std::bitset<CHAR_BIT * 3>(0B011100ULL); break;
-                            case 'd': bitset |= std::bitset<CHAR_BIT * 3>(0B011101ULL); break;
-                            case 'e': bitset |= std::bitset<CHAR_BIT * 3>(0B011110ULL); break;
-                            case 'f': bitset |= std::bitset<CHAR_BIT * 3>(0B011111ULL); break;
-                            case 'g': bitset |= std::bitset<CHAR_BIT * 3>(0B100000ULL); break;
-                            case 'h': bitset |= std::bitset<CHAR_BIT * 3>(0B100001ULL); break;
-                            case 'i': bitset |= std::bitset<CHAR_BIT * 3>(0B100010ULL); break;
-                            case 'j': bitset |= std::bitset<CHAR_BIT * 3>(0B100011ULL); break;
-                            case 'k': bitset |= std::bitset<CHAR_BIT * 3>(0B100100ULL); break;
-                            case 'l': bitset |= std::bitset<CHAR_BIT * 3>(0B100101ULL); break;
-                            case 'm': bitset |= std::bitset<CHAR_BIT * 3>(0B100110ULL); break;
-                            case 'n': bitset |= std::bitset<CHAR_BIT * 3>(0B100111ULL); break;
-                            case 'o': bitset |= std::bitset<CHAR_BIT * 3>(0B101000ULL); break;
-                            case 'p': bitset |= std::bitset<CHAR_BIT * 3>(0B101001ULL); break;
-                            case 'q': bitset |= std::bitset<CHAR_BIT * 3>(0B101010ULL); break;
-                            case 'r': bitset |= std::bitset<CHAR_BIT * 3>(0B101011ULL); break;
-                            case 's': bitset |= std::bitset<CHAR_BIT * 3>(0B101100ULL); break;
-                            case 't': bitset |= std::bitset<CHAR_BIT * 3>(0B101101ULL); break;
-                            case 'u': bitset |= std::bitset<CHAR_BIT * 3>(0B101110ULL); break;
-                            case 'v': bitset |= std::bitset<CHAR_BIT * 3>(0B101111ULL); break;
-                            case 'w': bitset |= std::bitset<CHAR_BIT * 3>(0B110000ULL); break;
-                            case 'x': bitset |= std::bitset<CHAR_BIT * 3>(0B110001ULL); break;
-                            case 'y': bitset |= std::bitset<CHAR_BIT * 3>(0B110010ULL); break;
-                            case 'z': bitset |= std::bitset<CHAR_BIT * 3>(0B110011ULL); break;
-                            case '0': bitset |= std::bitset<CHAR_BIT * 3>(0B110100ULL); break;
-                            case '1': bitset |= std::bitset<CHAR_BIT * 3>(0B110101ULL); break;
-                            case '2': bitset |= std::bitset<CHAR_BIT * 3>(0B110110ULL); break;
-                            case '3': bitset |= std::bitset<CHAR_BIT * 3>(0B110111ULL); break;
-                            case '4': bitset |= std::bitset<CHAR_BIT * 3>(0B111000ULL); break;
-                            case '5': bitset |= std::bitset<CHAR_BIT * 3>(0B111001ULL); break;
-                            case '6': bitset |= std::bitset<CHAR_BIT * 3>(0B111010ULL); break;
-                            case '7': bitset |= std::bitset<CHAR_BIT * 3>(0B111011ULL); break;
-                            case '8': bitset |= std::bitset<CHAR_BIT * 3>(0B111100ULL); break;
-                            case '9': bitset |= std::bitset<CHAR_BIT * 3>(0B111101ULL); break;
-                            case '+': bitset |= std::bitset<CHAR_BIT * 3>(0B111110ULL); break;
-                            case '/': bitset |= std::bitset<CHAR_BIT * 3>(0B111111ULL); break;
+                            case 'A': bitset |= std::bitset<charSize * 3>(0B000000ULL); break;
+                            case 'B': bitset |= std::bitset<charSize * 3>(0B000001ULL); break;
+                            case 'C': bitset |= std::bitset<charSize * 3>(0B000010ULL); break;
+                            case 'D': bitset |= std::bitset<charSize * 3>(0B000011ULL); break;
+                            case 'E': bitset |= std::bitset<charSize * 3>(0B000100ULL); break;
+                            case 'F': bitset |= std::bitset<charSize * 3>(0B000101ULL); break;
+                            case 'G': bitset |= std::bitset<charSize * 3>(0B000110ULL); break;
+                            case 'H': bitset |= std::bitset<charSize * 3>(0B000111ULL); break;
+                            case 'I': bitset |= std::bitset<charSize * 3>(0B001000ULL); break;
+                            case 'J': bitset |= std::bitset<charSize * 3>(0B001001ULL); break;
+                            case 'K': bitset |= std::bitset<charSize * 3>(0B001010ULL); break;
+                            case 'L': bitset |= std::bitset<charSize * 3>(0B001011ULL); break;
+                            case 'M': bitset |= std::bitset<charSize * 3>(0B001100ULL); break;
+                            case 'N': bitset |= std::bitset<charSize * 3>(0B001101ULL); break;
+                            case 'O': bitset |= std::bitset<charSize * 3>(0B001110ULL); break;
+                            case 'P': bitset |= std::bitset<charSize * 3>(0B001111ULL); break;
+                            case 'Q': bitset |= std::bitset<charSize * 3>(0B010000ULL); break;
+                            case 'R': bitset |= std::bitset<charSize * 3>(0B010001ULL); break;
+                            case 'S': bitset |= std::bitset<charSize * 3>(0B010010ULL); break;
+                            case 'T': bitset |= std::bitset<charSize * 3>(0B010011ULL); break;
+                            case 'U': bitset |= std::bitset<charSize * 3>(0B010100ULL); break;
+                            case 'V': bitset |= std::bitset<charSize * 3>(0B010101ULL); break;
+                            case 'W': bitset |= std::bitset<charSize * 3>(0B010110ULL); break;
+                            case 'X': bitset |= std::bitset<charSize * 3>(0B010111ULL); break;
+                            case 'Y': bitset |= std::bitset<charSize * 3>(0B011000ULL); break;
+                            case 'Z': bitset |= std::bitset<charSize * 3>(0B011001ULL); break;
+                            case 'a': bitset |= std::bitset<charSize * 3>(0B011010ULL); break;
+                            case 'b': bitset |= std::bitset<charSize * 3>(0B011011ULL); break;
+                            case 'c': bitset |= std::bitset<charSize * 3>(0B011100ULL); break;
+                            case 'd': bitset |= std::bitset<charSize * 3>(0B011101ULL); break;
+                            case 'e': bitset |= std::bitset<charSize * 3>(0B011110ULL); break;
+                            case 'f': bitset |= std::bitset<charSize * 3>(0B011111ULL); break;
+                            case 'g': bitset |= std::bitset<charSize * 3>(0B100000ULL); break;
+                            case 'h': bitset |= std::bitset<charSize * 3>(0B100001ULL); break;
+                            case 'i': bitset |= std::bitset<charSize * 3>(0B100010ULL); break;
+                            case 'j': bitset |= std::bitset<charSize * 3>(0B100011ULL); break;
+                            case 'k': bitset |= std::bitset<charSize * 3>(0B100100ULL); break;
+                            case 'l': bitset |= std::bitset<charSize * 3>(0B100101ULL); break;
+                            case 'm': bitset |= std::bitset<charSize * 3>(0B100110ULL); break;
+                            case 'n': bitset |= std::bitset<charSize * 3>(0B100111ULL); break;
+                            case 'o': bitset |= std::bitset<charSize * 3>(0B101000ULL); break;
+                            case 'p': bitset |= std::bitset<charSize * 3>(0B101001ULL); break;
+                            case 'q': bitset |= std::bitset<charSize * 3>(0B101010ULL); break;
+                            case 'r': bitset |= std::bitset<charSize * 3>(0B101011ULL); break;
+                            case 's': bitset |= std::bitset<charSize * 3>(0B101100ULL); break;
+                            case 't': bitset |= std::bitset<charSize * 3>(0B101101ULL); break;
+                            case 'u': bitset |= std::bitset<charSize * 3>(0B101110ULL); break;
+                            case 'v': bitset |= std::bitset<charSize * 3>(0B101111ULL); break;
+                            case 'w': bitset |= std::bitset<charSize * 3>(0B110000ULL); break;
+                            case 'x': bitset |= std::bitset<charSize * 3>(0B110001ULL); break;
+                            case 'y': bitset |= std::bitset<charSize * 3>(0B110010ULL); break;
+                            case 'z': bitset |= std::bitset<charSize * 3>(0B110011ULL); break;
+                            case '0': bitset |= std::bitset<charSize * 3>(0B110100ULL); break;
+                            case '1': bitset |= std::bitset<charSize * 3>(0B110101ULL); break;
+                            case '2': bitset |= std::bitset<charSize * 3>(0B110110ULL); break;
+                            case '3': bitset |= std::bitset<charSize * 3>(0B110111ULL); break;
+                            case '4': bitset |= std::bitset<charSize * 3>(0B111000ULL); break;
+                            case '5': bitset |= std::bitset<charSize * 3>(0B111001ULL); break;
+                            case '6': bitset |= std::bitset<charSize * 3>(0B111010ULL); break;
+                            case '7': bitset |= std::bitset<charSize * 3>(0B111011ULL); break;
+                            case '8': bitset |= std::bitset<charSize * 3>(0B111100ULL); break;
+                            case '9': bitset |= std::bitset<charSize * 3>(0B111101ULL); break;
+                            case '+': bitset |= std::bitset<charSize * 3>(0B111110ULL); break;
+                            case '/': bitset |= std::bitset<charSize * 3>(0B111111ULL); break;
                             case '=': paddingCounter += 1U; break;
                             default: throw Error(Error::Type::STRING_PARSE_ERROR);
                         }
@@ -3574,7 +3579,7 @@ namespace BinaryText
                 switch(loopCounter) {
                     case 4U: break;
                     case 3U: {
-                        bitset <<= (CHAR_BIT * 3) / 4;
+                        bitset <<= (charSize * 3) / 4;
 
                         switch(paddingCounter) {
                             case 1U: paddingCounter = 2U; break;
@@ -3585,7 +3590,7 @@ namespace BinaryText
                         break;
                     }
                     case 2U: {
-                        bitset <<= ((CHAR_BIT * 3) / 4) * 2;
+                        bitset <<= ((charSize * 3) / 4) * 2;
 
                         switch(paddingCounter) {
                             case 0U: paddingCounter = 2U; break;
@@ -3600,19 +3605,19 @@ namespace BinaryText
 
                 switch(paddingCounter) {
                     case 0U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> charSize).to_ullong()));
                         addToByteBuffer(static_cast<unsigned char>(bitset.to_ullong()));
 
                         break;
                     }
                     case 1U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> charSize).to_ullong()));
 
                         break;
                     }
-                    case 2U: addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())); break;
+                    case 2U: addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())); break;
                     default: throw Error(Error::Type::STRING_PARSE_ERROR);
                 }
 
@@ -3687,7 +3692,7 @@ namespace BinaryText
             std::string _what;
         };
 
-        static_assert(CHAR_BIT == 8, "This Base64Url namespace only accepts CHAR_BIT to be 8");
+        static_assert(std::numeric_limits<unsigned char>::digits == 8, "These Base64Url functions only works if a char is 8 bits big");
 
         /**
          * @brief Encodes a not-encoded string into a Base64Url encoded string.
@@ -3708,13 +3713,13 @@ namespace BinaryText
             }
 
             for(std::string::const_iterator iter = string_.cbegin(); iter != string_.cend(); ++iter) {
-                std::bitset<CHAR_BIT * 3> bitset;
+                std::bitset<charSize * 3> bitset;
                 unsigned int counter(0U);
 
                 for(std::string::const_iterator jter(iter); jter != string_.cend(); ++jter) {
                     counter += 1U;
-                    bitset <<= CHAR_BIT;
-                    bitset |= std::bitset<CHAR_BIT * 3>(std::bitset<CHAR_BIT>(*jter).to_ullong());
+                    bitset <<= charSize;
+                    bitset |= std::bitset<charSize * 3>(std::bitset<charSize>(*jter).to_ullong());
 
                     if((std::next(jter, 1) == string_.cend()) or (std::next(jter, 1) == std::next(iter, 3))) {
                         iter = jter;
@@ -3726,13 +3731,13 @@ namespace BinaryText
                 switch(counter) {
                     case 3U: counter = 4U; break;
                     case 2U: {
-                        bitset <<= CHAR_BIT;
+                        bitset <<= charSize;
                         counter = 3U;
 
                         break;
                     }
                     case 1U: {
-                        bitset <<= (CHAR_BIT * 2);
+                        bitset <<= (charSize * 2);
                         counter = 2U;
 
                         break;
@@ -3748,7 +3753,7 @@ namespace BinaryText
                             break;
                         }
                     } else {
-                        std::bitset<(CHAR_BIT * 3) / 4> partialBitset((bitset >> ((CHAR_BIT * 3) - (6 * i))).to_ullong());
+                        std::bitset<(charSize * 3) / 4> partialBitset((bitset >> ((charSize * 3) - (6 * i))).to_ullong());
 
                         switch(partialBitset.to_ullong()) {
                             case 0B000000ULL: encodedString.append(1, 'A'); break;
@@ -3845,13 +3850,13 @@ namespace BinaryText
             }
 
             for(typename ByteBuffer<ByteType>::ConstantIterator iter(byteBuffer_.ConstantBegin()); iter != byteBuffer_.ConstantEnd(); ++iter) {
-                std::bitset<CHAR_BIT * 3> bitset;
+                std::bitset<charSize * 3> bitset;
                 unsigned int counter(0U);
 
                 for(typename ByteBuffer<ByteType>::ConstantIterator jter(iter); jter != byteBuffer_.ConstantEnd(); ++jter) {
                     counter += 1U;
-                    bitset <<= CHAR_BIT;
-                    bitset |= std::bitset<CHAR_BIT * 3>(std::bitset<CHAR_BIT>(static_cast<char>(*jter)).to_ullong());
+                    bitset <<= charSize;
+                    bitset |= std::bitset<charSize * 3>(std::bitset<charSize>(static_cast<char>(*jter)).to_ullong());
 
                     if(std::next(jter, 1) == byteBuffer_.ConstantEnd() or std::next(jter, 1) == std::next(iter, 3)) {
                         iter = jter;
@@ -3863,13 +3868,13 @@ namespace BinaryText
                 switch(counter) {
                     case 3U: counter = 4U; break;
                     case 2U: {
-                        bitset <<= CHAR_BIT;
+                        bitset <<= charSize;
                         counter = 3U;
 
                         break;
                     }
                     case 1U: {
-                        bitset <<= (CHAR_BIT * 2);
+                        bitset <<= (charSize * 2);
                         counter = 2U;
 
                         break;
@@ -3885,7 +3890,7 @@ namespace BinaryText
                             break;
                         }
                     } else {
-                        std::bitset<(CHAR_BIT * 3) / 4> partialBitset((bitset >> ((CHAR_BIT * 3) - (6 * i))).to_ullong());
+                        std::bitset<(charSize * 3) / 4> partialBitset((bitset >> ((charSize * 3) - (6 * i))).to_ullong());
 
                         switch(partialBitset.to_ullong()) {
                             case 0B000000ULL: encodedString.append(1, 'A'); break;
@@ -3978,82 +3983,82 @@ namespace BinaryText
             }
 
             for(std::string::const_iterator iter(encodedString_.cbegin()); iter != encodedString_.cend(); ++iter) {
-                std::bitset<CHAR_BIT * 3> bitset;
+                std::bitset<charSize * 3> bitset;
                 unsigned int paddingCounter(0U);
                 unsigned int loopCounter(0U);
 
                 for(std::string::const_iterator jter(iter); jter != encodedString_.cend(); ++jter) {
                     loopCounter += 1U;
-                    bitset <<= (CHAR_BIT * 3) / 4;
+                    bitset <<= (charSize * 3) / 4;
 
                     if(paddingCounter > 0U and *jter != '=') {
                         throw Error(Error::Type::STRING_PARSE_ERROR);
                     } else {
                         switch(*jter) {
-                            case 'A': bitset |= std::bitset<CHAR_BIT * 3>(0B000000ULL); break;
-                            case 'B': bitset |= std::bitset<CHAR_BIT * 3>(0B000001ULL); break;
-                            case 'C': bitset |= std::bitset<CHAR_BIT * 3>(0B000010ULL); break;
-                            case 'D': bitset |= std::bitset<CHAR_BIT * 3>(0B000011ULL); break;
-                            case 'E': bitset |= std::bitset<CHAR_BIT * 3>(0B000100ULL); break;
-                            case 'F': bitset |= std::bitset<CHAR_BIT * 3>(0B000101ULL); break;
-                            case 'G': bitset |= std::bitset<CHAR_BIT * 3>(0B000110ULL); break;
-                            case 'H': bitset |= std::bitset<CHAR_BIT * 3>(0B000111ULL); break;
-                            case 'I': bitset |= std::bitset<CHAR_BIT * 3>(0B001000ULL); break;
-                            case 'J': bitset |= std::bitset<CHAR_BIT * 3>(0B001001ULL); break;
-                            case 'K': bitset |= std::bitset<CHAR_BIT * 3>(0B001010ULL); break;
-                            case 'L': bitset |= std::bitset<CHAR_BIT * 3>(0B001011ULL); break;
-                            case 'M': bitset |= std::bitset<CHAR_BIT * 3>(0B001100ULL); break;
-                            case 'N': bitset |= std::bitset<CHAR_BIT * 3>(0B001101ULL); break;
-                            case 'O': bitset |= std::bitset<CHAR_BIT * 3>(0B001110ULL); break;
-                            case 'P': bitset |= std::bitset<CHAR_BIT * 3>(0B001111ULL); break;
-                            case 'Q': bitset |= std::bitset<CHAR_BIT * 3>(0B010000ULL); break;
-                            case 'R': bitset |= std::bitset<CHAR_BIT * 3>(0B010001ULL); break;
-                            case 'S': bitset |= std::bitset<CHAR_BIT * 3>(0B010010ULL); break;
-                            case 'T': bitset |= std::bitset<CHAR_BIT * 3>(0B010011ULL); break;
-                            case 'U': bitset |= std::bitset<CHAR_BIT * 3>(0B010100ULL); break;
-                            case 'V': bitset |= std::bitset<CHAR_BIT * 3>(0B010101ULL); break;
-                            case 'W': bitset |= std::bitset<CHAR_BIT * 3>(0B010110ULL); break;
-                            case 'X': bitset |= std::bitset<CHAR_BIT * 3>(0B010111ULL); break;
-                            case 'Y': bitset |= std::bitset<CHAR_BIT * 3>(0B011000ULL); break;
-                            case 'Z': bitset |= std::bitset<CHAR_BIT * 3>(0B011001ULL); break;
-                            case 'a': bitset |= std::bitset<CHAR_BIT * 3>(0B011010ULL); break;
-                            case 'b': bitset |= std::bitset<CHAR_BIT * 3>(0B011011ULL); break;
-                            case 'c': bitset |= std::bitset<CHAR_BIT * 3>(0B011100ULL); break;
-                            case 'd': bitset |= std::bitset<CHAR_BIT * 3>(0B011101ULL); break;
-                            case 'e': bitset |= std::bitset<CHAR_BIT * 3>(0B011110ULL); break;
-                            case 'f': bitset |= std::bitset<CHAR_BIT * 3>(0B011111ULL); break;
-                            case 'g': bitset |= std::bitset<CHAR_BIT * 3>(0B100000ULL); break;
-                            case 'h': bitset |= std::bitset<CHAR_BIT * 3>(0B100001ULL); break;
-                            case 'i': bitset |= std::bitset<CHAR_BIT * 3>(0B100010ULL); break;
-                            case 'j': bitset |= std::bitset<CHAR_BIT * 3>(0B100011ULL); break;
-                            case 'k': bitset |= std::bitset<CHAR_BIT * 3>(0B100100ULL); break;
-                            case 'l': bitset |= std::bitset<CHAR_BIT * 3>(0B100101ULL); break;
-                            case 'm': bitset |= std::bitset<CHAR_BIT * 3>(0B100110ULL); break;
-                            case 'n': bitset |= std::bitset<CHAR_BIT * 3>(0B100111ULL); break;
-                            case 'o': bitset |= std::bitset<CHAR_BIT * 3>(0B101000ULL); break;
-                            case 'p': bitset |= std::bitset<CHAR_BIT * 3>(0B101001ULL); break;
-                            case 'q': bitset |= std::bitset<CHAR_BIT * 3>(0B101010ULL); break;
-                            case 'r': bitset |= std::bitset<CHAR_BIT * 3>(0B101011ULL); break;
-                            case 's': bitset |= std::bitset<CHAR_BIT * 3>(0B101100ULL); break;
-                            case 't': bitset |= std::bitset<CHAR_BIT * 3>(0B101101ULL); break;
-                            case 'u': bitset |= std::bitset<CHAR_BIT * 3>(0B101110ULL); break;
-                            case 'v': bitset |= std::bitset<CHAR_BIT * 3>(0B101111ULL); break;
-                            case 'w': bitset |= std::bitset<CHAR_BIT * 3>(0B110000ULL); break;
-                            case 'x': bitset |= std::bitset<CHAR_BIT * 3>(0B110001ULL); break;
-                            case 'y': bitset |= std::bitset<CHAR_BIT * 3>(0B110010ULL); break;
-                            case 'z': bitset |= std::bitset<CHAR_BIT * 3>(0B110011ULL); break;
-                            case '0': bitset |= std::bitset<CHAR_BIT * 3>(0B110100ULL); break;
-                            case '1': bitset |= std::bitset<CHAR_BIT * 3>(0B110101ULL); break;
-                            case '2': bitset |= std::bitset<CHAR_BIT * 3>(0B110110ULL); break;
-                            case '3': bitset |= std::bitset<CHAR_BIT * 3>(0B110111ULL); break;
-                            case '4': bitset |= std::bitset<CHAR_BIT * 3>(0B111000ULL); break;
-                            case '5': bitset |= std::bitset<CHAR_BIT * 3>(0B111001ULL); break;
-                            case '6': bitset |= std::bitset<CHAR_BIT * 3>(0B111010ULL); break;
-                            case '7': bitset |= std::bitset<CHAR_BIT * 3>(0B111011ULL); break;
-                            case '8': bitset |= std::bitset<CHAR_BIT * 3>(0B111100ULL); break;
-                            case '9': bitset |= std::bitset<CHAR_BIT * 3>(0B111101ULL); break;
-                            case '-': bitset |= std::bitset<CHAR_BIT * 3>(0B111110ULL); break;
-                            case '_': bitset |= std::bitset<CHAR_BIT * 3>(0B111111ULL); break;
+                            case 'A': bitset |= std::bitset<charSize * 3>(0B000000ULL); break;
+                            case 'B': bitset |= std::bitset<charSize * 3>(0B000001ULL); break;
+                            case 'C': bitset |= std::bitset<charSize * 3>(0B000010ULL); break;
+                            case 'D': bitset |= std::bitset<charSize * 3>(0B000011ULL); break;
+                            case 'E': bitset |= std::bitset<charSize * 3>(0B000100ULL); break;
+                            case 'F': bitset |= std::bitset<charSize * 3>(0B000101ULL); break;
+                            case 'G': bitset |= std::bitset<charSize * 3>(0B000110ULL); break;
+                            case 'H': bitset |= std::bitset<charSize * 3>(0B000111ULL); break;
+                            case 'I': bitset |= std::bitset<charSize * 3>(0B001000ULL); break;
+                            case 'J': bitset |= std::bitset<charSize * 3>(0B001001ULL); break;
+                            case 'K': bitset |= std::bitset<charSize * 3>(0B001010ULL); break;
+                            case 'L': bitset |= std::bitset<charSize * 3>(0B001011ULL); break;
+                            case 'M': bitset |= std::bitset<charSize * 3>(0B001100ULL); break;
+                            case 'N': bitset |= std::bitset<charSize * 3>(0B001101ULL); break;
+                            case 'O': bitset |= std::bitset<charSize * 3>(0B001110ULL); break;
+                            case 'P': bitset |= std::bitset<charSize * 3>(0B001111ULL); break;
+                            case 'Q': bitset |= std::bitset<charSize * 3>(0B010000ULL); break;
+                            case 'R': bitset |= std::bitset<charSize * 3>(0B010001ULL); break;
+                            case 'S': bitset |= std::bitset<charSize * 3>(0B010010ULL); break;
+                            case 'T': bitset |= std::bitset<charSize * 3>(0B010011ULL); break;
+                            case 'U': bitset |= std::bitset<charSize * 3>(0B010100ULL); break;
+                            case 'V': bitset |= std::bitset<charSize * 3>(0B010101ULL); break;
+                            case 'W': bitset |= std::bitset<charSize * 3>(0B010110ULL); break;
+                            case 'X': bitset |= std::bitset<charSize * 3>(0B010111ULL); break;
+                            case 'Y': bitset |= std::bitset<charSize * 3>(0B011000ULL); break;
+                            case 'Z': bitset |= std::bitset<charSize * 3>(0B011001ULL); break;
+                            case 'a': bitset |= std::bitset<charSize * 3>(0B011010ULL); break;
+                            case 'b': bitset |= std::bitset<charSize * 3>(0B011011ULL); break;
+                            case 'c': bitset |= std::bitset<charSize * 3>(0B011100ULL); break;
+                            case 'd': bitset |= std::bitset<charSize * 3>(0B011101ULL); break;
+                            case 'e': bitset |= std::bitset<charSize * 3>(0B011110ULL); break;
+                            case 'f': bitset |= std::bitset<charSize * 3>(0B011111ULL); break;
+                            case 'g': bitset |= std::bitset<charSize * 3>(0B100000ULL); break;
+                            case 'h': bitset |= std::bitset<charSize * 3>(0B100001ULL); break;
+                            case 'i': bitset |= std::bitset<charSize * 3>(0B100010ULL); break;
+                            case 'j': bitset |= std::bitset<charSize * 3>(0B100011ULL); break;
+                            case 'k': bitset |= std::bitset<charSize * 3>(0B100100ULL); break;
+                            case 'l': bitset |= std::bitset<charSize * 3>(0B100101ULL); break;
+                            case 'm': bitset |= std::bitset<charSize * 3>(0B100110ULL); break;
+                            case 'n': bitset |= std::bitset<charSize * 3>(0B100111ULL); break;
+                            case 'o': bitset |= std::bitset<charSize * 3>(0B101000ULL); break;
+                            case 'p': bitset |= std::bitset<charSize * 3>(0B101001ULL); break;
+                            case 'q': bitset |= std::bitset<charSize * 3>(0B101010ULL); break;
+                            case 'r': bitset |= std::bitset<charSize * 3>(0B101011ULL); break;
+                            case 's': bitset |= std::bitset<charSize * 3>(0B101100ULL); break;
+                            case 't': bitset |= std::bitset<charSize * 3>(0B101101ULL); break;
+                            case 'u': bitset |= std::bitset<charSize * 3>(0B101110ULL); break;
+                            case 'v': bitset |= std::bitset<charSize * 3>(0B101111ULL); break;
+                            case 'w': bitset |= std::bitset<charSize * 3>(0B110000ULL); break;
+                            case 'x': bitset |= std::bitset<charSize * 3>(0B110001ULL); break;
+                            case 'y': bitset |= std::bitset<charSize * 3>(0B110010ULL); break;
+                            case 'z': bitset |= std::bitset<charSize * 3>(0B110011ULL); break;
+                            case '0': bitset |= std::bitset<charSize * 3>(0B110100ULL); break;
+                            case '1': bitset |= std::bitset<charSize * 3>(0B110101ULL); break;
+                            case '2': bitset |= std::bitset<charSize * 3>(0B110110ULL); break;
+                            case '3': bitset |= std::bitset<charSize * 3>(0B110111ULL); break;
+                            case '4': bitset |= std::bitset<charSize * 3>(0B111000ULL); break;
+                            case '5': bitset |= std::bitset<charSize * 3>(0B111001ULL); break;
+                            case '6': bitset |= std::bitset<charSize * 3>(0B111010ULL); break;
+                            case '7': bitset |= std::bitset<charSize * 3>(0B111011ULL); break;
+                            case '8': bitset |= std::bitset<charSize * 3>(0B111100ULL); break;
+                            case '9': bitset |= std::bitset<charSize * 3>(0B111101ULL); break;
+                            case '-': bitset |= std::bitset<charSize * 3>(0B111110ULL); break;
+                            case '_': bitset |= std::bitset<charSize * 3>(0B111111ULL); break;
                             case '=': paddingCounter += 1U; break;
                             default: throw Error(Error::Type::STRING_PARSE_ERROR);
                         }
@@ -4069,7 +4074,7 @@ namespace BinaryText
                 switch(loopCounter) {
                     case 4U: break;
                     case 3U: {
-                        bitset <<= ((CHAR_BIT * 3) / 4);
+                        bitset <<= ((charSize * 3) / 4);
 
                         switch(paddingCounter) {
                             case 1U: paddingCounter = 2U; break;
@@ -4080,7 +4085,7 @@ namespace BinaryText
                         break;
                     }
                     case 2U: {
-                        bitset <<= (((CHAR_BIT * 3) / 4) * 2);
+                        bitset <<= (((charSize * 3) / 4) * 2);
 
                         switch(paddingCounter) {
                             case 0U: paddingCounter = 2U; break;
@@ -4095,19 +4100,19 @@ namespace BinaryText
 
                 switch(paddingCounter) {
                     case 0U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> charSize).to_ullong())));
                         decodedString.append(1, static_cast<char>(static_cast<unsigned char>(bitset.to_ullong())));
 
                         break;
                     }
                     case 1U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> charSize).to_ullong())));
 
                         break;
                     }
-                    case 2U: decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()))); break;
+                    case 2U: decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()))); break;
                     default: throw Error(Error::Type::STRING_PARSE_ERROR);
                 }
 
@@ -4155,82 +4160,82 @@ namespace BinaryText
             };
 
             for(std::string::const_iterator iter(encodedString_.cbegin()); iter != encodedString_.cend(); ++iter) {
-                std::bitset<CHAR_BIT * 3> bitset;
+                std::bitset<charSize * 3> bitset;
                 unsigned int paddingCounter(0U);
                 unsigned int loopCounter(0U);
 
                 for(std::string::const_iterator jter(iter); jter != encodedString_.cend(); ++jter) {
                     loopCounter += 1U;
-                    bitset <<= (CHAR_BIT * 3) / 4;
+                    bitset <<= (charSize * 3) / 4;
 
                     if(paddingCounter > 0U and *jter != '=') {
                         throw Error(Error::Type::STRING_PARSE_ERROR);
                     } else {
                         switch(*jter) {
-                            case 'A': bitset |= std::bitset<CHAR_BIT * 3>(0B000000ULL); break;
-                            case 'B': bitset |= std::bitset<CHAR_BIT * 3>(0B000001ULL); break;
-                            case 'C': bitset |= std::bitset<CHAR_BIT * 3>(0B000010ULL); break;
-                            case 'D': bitset |= std::bitset<CHAR_BIT * 3>(0B000011ULL); break;
-                            case 'E': bitset |= std::bitset<CHAR_BIT * 3>(0B000100ULL); break;
-                            case 'F': bitset |= std::bitset<CHAR_BIT * 3>(0B000101ULL); break;
-                            case 'G': bitset |= std::bitset<CHAR_BIT * 3>(0B000110ULL); break;
-                            case 'H': bitset |= std::bitset<CHAR_BIT * 3>(0B000111ULL); break;
-                            case 'I': bitset |= std::bitset<CHAR_BIT * 3>(0B001000ULL); break;
-                            case 'J': bitset |= std::bitset<CHAR_BIT * 3>(0B001001ULL); break;
-                            case 'K': bitset |= std::bitset<CHAR_BIT * 3>(0B001010ULL); break;
-                            case 'L': bitset |= std::bitset<CHAR_BIT * 3>(0B001011ULL); break;
-                            case 'M': bitset |= std::bitset<CHAR_BIT * 3>(0B001100ULL); break;
-                            case 'N': bitset |= std::bitset<CHAR_BIT * 3>(0B001101ULL); break;
-                            case 'O': bitset |= std::bitset<CHAR_BIT * 3>(0B001110ULL); break;
-                            case 'P': bitset |= std::bitset<CHAR_BIT * 3>(0B001111ULL); break;
-                            case 'Q': bitset |= std::bitset<CHAR_BIT * 3>(0B010000ULL); break;
-                            case 'R': bitset |= std::bitset<CHAR_BIT * 3>(0B010001ULL); break;
-                            case 'S': bitset |= std::bitset<CHAR_BIT * 3>(0B010010ULL); break;
-                            case 'T': bitset |= std::bitset<CHAR_BIT * 3>(0B010011ULL); break;
-                            case 'U': bitset |= std::bitset<CHAR_BIT * 3>(0B010100ULL); break;
-                            case 'V': bitset |= std::bitset<CHAR_BIT * 3>(0B010101ULL); break;
-                            case 'W': bitset |= std::bitset<CHAR_BIT * 3>(0B010110ULL); break;
-                            case 'X': bitset |= std::bitset<CHAR_BIT * 3>(0B010111ULL); break;
-                            case 'Y': bitset |= std::bitset<CHAR_BIT * 3>(0B011000ULL); break;
-                            case 'Z': bitset |= std::bitset<CHAR_BIT * 3>(0B011001ULL); break;
-                            case 'a': bitset |= std::bitset<CHAR_BIT * 3>(0B011010ULL); break;
-                            case 'b': bitset |= std::bitset<CHAR_BIT * 3>(0B011011ULL); break;
-                            case 'c': bitset |= std::bitset<CHAR_BIT * 3>(0B011100ULL); break;
-                            case 'd': bitset |= std::bitset<CHAR_BIT * 3>(0B011101ULL); break;
-                            case 'e': bitset |= std::bitset<CHAR_BIT * 3>(0B011110ULL); break;
-                            case 'f': bitset |= std::bitset<CHAR_BIT * 3>(0B011111ULL); break;
-                            case 'g': bitset |= std::bitset<CHAR_BIT * 3>(0B100000ULL); break;
-                            case 'h': bitset |= std::bitset<CHAR_BIT * 3>(0B100001ULL); break;
-                            case 'i': bitset |= std::bitset<CHAR_BIT * 3>(0B100010ULL); break;
-                            case 'j': bitset |= std::bitset<CHAR_BIT * 3>(0B100011ULL); break;
-                            case 'k': bitset |= std::bitset<CHAR_BIT * 3>(0B100100ULL); break;
-                            case 'l': bitset |= std::bitset<CHAR_BIT * 3>(0B100101ULL); break;
-                            case 'm': bitset |= std::bitset<CHAR_BIT * 3>(0B100110ULL); break;
-                            case 'n': bitset |= std::bitset<CHAR_BIT * 3>(0B100111ULL); break;
-                            case 'o': bitset |= std::bitset<CHAR_BIT * 3>(0B101000ULL); break;
-                            case 'p': bitset |= std::bitset<CHAR_BIT * 3>(0B101001ULL); break;
-                            case 'q': bitset |= std::bitset<CHAR_BIT * 3>(0B101010ULL); break;
-                            case 'r': bitset |= std::bitset<CHAR_BIT * 3>(0B101011ULL); break;
-                            case 's': bitset |= std::bitset<CHAR_BIT * 3>(0B101100ULL); break;
-                            case 't': bitset |= std::bitset<CHAR_BIT * 3>(0B101101ULL); break;
-                            case 'u': bitset |= std::bitset<CHAR_BIT * 3>(0B101110ULL); break;
-                            case 'v': bitset |= std::bitset<CHAR_BIT * 3>(0B101111ULL); break;
-                            case 'w': bitset |= std::bitset<CHAR_BIT * 3>(0B110000ULL); break;
-                            case 'x': bitset |= std::bitset<CHAR_BIT * 3>(0B110001ULL); break;
-                            case 'y': bitset |= std::bitset<CHAR_BIT * 3>(0B110010ULL); break;
-                            case 'z': bitset |= std::bitset<CHAR_BIT * 3>(0B110011ULL); break;
-                            case '0': bitset |= std::bitset<CHAR_BIT * 3>(0B110100ULL); break;
-                            case '1': bitset |= std::bitset<CHAR_BIT * 3>(0B110101ULL); break;
-                            case '2': bitset |= std::bitset<CHAR_BIT * 3>(0B110110ULL); break;
-                            case '3': bitset |= std::bitset<CHAR_BIT * 3>(0B110111ULL); break;
-                            case '4': bitset |= std::bitset<CHAR_BIT * 3>(0B111000ULL); break;
-                            case '5': bitset |= std::bitset<CHAR_BIT * 3>(0B111001ULL); break;
-                            case '6': bitset |= std::bitset<CHAR_BIT * 3>(0B111010ULL); break;
-                            case '7': bitset |= std::bitset<CHAR_BIT * 3>(0B111011ULL); break;
-                            case '8': bitset |= std::bitset<CHAR_BIT * 3>(0B111100ULL); break;
-                            case '9': bitset |= std::bitset<CHAR_BIT * 3>(0B111101ULL); break;
-                            case '-': bitset |= std::bitset<CHAR_BIT * 3>(0B111110ULL); break;
-                            case '_': bitset |= std::bitset<CHAR_BIT * 3>(0B111111ULL); break;
+                            case 'A': bitset |= std::bitset<charSize * 3>(0B000000ULL); break;
+                            case 'B': bitset |= std::bitset<charSize * 3>(0B000001ULL); break;
+                            case 'C': bitset |= std::bitset<charSize * 3>(0B000010ULL); break;
+                            case 'D': bitset |= std::bitset<charSize * 3>(0B000011ULL); break;
+                            case 'E': bitset |= std::bitset<charSize * 3>(0B000100ULL); break;
+                            case 'F': bitset |= std::bitset<charSize * 3>(0B000101ULL); break;
+                            case 'G': bitset |= std::bitset<charSize * 3>(0B000110ULL); break;
+                            case 'H': bitset |= std::bitset<charSize * 3>(0B000111ULL); break;
+                            case 'I': bitset |= std::bitset<charSize * 3>(0B001000ULL); break;
+                            case 'J': bitset |= std::bitset<charSize * 3>(0B001001ULL); break;
+                            case 'K': bitset |= std::bitset<charSize * 3>(0B001010ULL); break;
+                            case 'L': bitset |= std::bitset<charSize * 3>(0B001011ULL); break;
+                            case 'M': bitset |= std::bitset<charSize * 3>(0B001100ULL); break;
+                            case 'N': bitset |= std::bitset<charSize * 3>(0B001101ULL); break;
+                            case 'O': bitset |= std::bitset<charSize * 3>(0B001110ULL); break;
+                            case 'P': bitset |= std::bitset<charSize * 3>(0B001111ULL); break;
+                            case 'Q': bitset |= std::bitset<charSize * 3>(0B010000ULL); break;
+                            case 'R': bitset |= std::bitset<charSize * 3>(0B010001ULL); break;
+                            case 'S': bitset |= std::bitset<charSize * 3>(0B010010ULL); break;
+                            case 'T': bitset |= std::bitset<charSize * 3>(0B010011ULL); break;
+                            case 'U': bitset |= std::bitset<charSize * 3>(0B010100ULL); break;
+                            case 'V': bitset |= std::bitset<charSize * 3>(0B010101ULL); break;
+                            case 'W': bitset |= std::bitset<charSize * 3>(0B010110ULL); break;
+                            case 'X': bitset |= std::bitset<charSize * 3>(0B010111ULL); break;
+                            case 'Y': bitset |= std::bitset<charSize * 3>(0B011000ULL); break;
+                            case 'Z': bitset |= std::bitset<charSize * 3>(0B011001ULL); break;
+                            case 'a': bitset |= std::bitset<charSize * 3>(0B011010ULL); break;
+                            case 'b': bitset |= std::bitset<charSize * 3>(0B011011ULL); break;
+                            case 'c': bitset |= std::bitset<charSize * 3>(0B011100ULL); break;
+                            case 'd': bitset |= std::bitset<charSize * 3>(0B011101ULL); break;
+                            case 'e': bitset |= std::bitset<charSize * 3>(0B011110ULL); break;
+                            case 'f': bitset |= std::bitset<charSize * 3>(0B011111ULL); break;
+                            case 'g': bitset |= std::bitset<charSize * 3>(0B100000ULL); break;
+                            case 'h': bitset |= std::bitset<charSize * 3>(0B100001ULL); break;
+                            case 'i': bitset |= std::bitset<charSize * 3>(0B100010ULL); break;
+                            case 'j': bitset |= std::bitset<charSize * 3>(0B100011ULL); break;
+                            case 'k': bitset |= std::bitset<charSize * 3>(0B100100ULL); break;
+                            case 'l': bitset |= std::bitset<charSize * 3>(0B100101ULL); break;
+                            case 'm': bitset |= std::bitset<charSize * 3>(0B100110ULL); break;
+                            case 'n': bitset |= std::bitset<charSize * 3>(0B100111ULL); break;
+                            case 'o': bitset |= std::bitset<charSize * 3>(0B101000ULL); break;
+                            case 'p': bitset |= std::bitset<charSize * 3>(0B101001ULL); break;
+                            case 'q': bitset |= std::bitset<charSize * 3>(0B101010ULL); break;
+                            case 'r': bitset |= std::bitset<charSize * 3>(0B101011ULL); break;
+                            case 's': bitset |= std::bitset<charSize * 3>(0B101100ULL); break;
+                            case 't': bitset |= std::bitset<charSize * 3>(0B101101ULL); break;
+                            case 'u': bitset |= std::bitset<charSize * 3>(0B101110ULL); break;
+                            case 'v': bitset |= std::bitset<charSize * 3>(0B101111ULL); break;
+                            case 'w': bitset |= std::bitset<charSize * 3>(0B110000ULL); break;
+                            case 'x': bitset |= std::bitset<charSize * 3>(0B110001ULL); break;
+                            case 'y': bitset |= std::bitset<charSize * 3>(0B110010ULL); break;
+                            case 'z': bitset |= std::bitset<charSize * 3>(0B110011ULL); break;
+                            case '0': bitset |= std::bitset<charSize * 3>(0B110100ULL); break;
+                            case '1': bitset |= std::bitset<charSize * 3>(0B110101ULL); break;
+                            case '2': bitset |= std::bitset<charSize * 3>(0B110110ULL); break;
+                            case '3': bitset |= std::bitset<charSize * 3>(0B110111ULL); break;
+                            case '4': bitset |= std::bitset<charSize * 3>(0B111000ULL); break;
+                            case '5': bitset |= std::bitset<charSize * 3>(0B111001ULL); break;
+                            case '6': bitset |= std::bitset<charSize * 3>(0B111010ULL); break;
+                            case '7': bitset |= std::bitset<charSize * 3>(0B111011ULL); break;
+                            case '8': bitset |= std::bitset<charSize * 3>(0B111100ULL); break;
+                            case '9': bitset |= std::bitset<charSize * 3>(0B111101ULL); break;
+                            case '-': bitset |= std::bitset<charSize * 3>(0B111110ULL); break;
+                            case '_': bitset |= std::bitset<charSize * 3>(0B111111ULL); break;
                             case '=': paddingCounter += 1U; break;
                             default: throw Error(Error::Type::STRING_PARSE_ERROR);
                         }
@@ -4246,7 +4251,7 @@ namespace BinaryText
                 switch(loopCounter) {
                     case 4U: break;
                     case 3U: {
-                        bitset <<= ((CHAR_BIT * 3) / 4);
+                        bitset <<= ((charSize * 3) / 4);
 
                         switch(paddingCounter) {
                             case 1U: paddingCounter = 2U; break;
@@ -4257,7 +4262,7 @@ namespace BinaryText
                         break;
                     }
                     case 2U: {
-                        bitset <<= (((CHAR_BIT * 3) / 4) * 2);
+                        bitset <<= (((charSize * 3) / 4) * 2);
 
                         switch(paddingCounter) {
                             case 0U: paddingCounter = 2U; break;
@@ -4272,19 +4277,19 @@ namespace BinaryText
 
                 switch(paddingCounter) {
                     case 0U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> charSize).to_ullong()));
                         addToByteBuffer(static_cast<unsigned char>(bitset.to_ullong()));
 
                         break;
                     }
                     case 1U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> charSize).to_ullong()));
 
                         break;
                     }
-                    case 2U: addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())); break;
+                    case 2U: addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())); break;
                     default: throw Error(Error::Type::STRING_PARSE_ERROR);
                 }
 
@@ -4359,7 +4364,7 @@ namespace BinaryText
             std::string _what;
         };
 
-        static_assert(CHAR_BIT == 8, "This Ascii85 namespace only accepts CHAR_BIT to be 8");
+        static_assert(charSize == 8, "These Ascii85 functions only works if a char is 8 bits big");
 
         /**
          * @brief Encodes a not-encoded string into an Ascii85 encoded string.
@@ -4385,13 +4390,13 @@ namespace BinaryText
             }
 
             for(std::string::const_iterator iter = string_.cbegin(); iter != string_.cend(); ++iter) {
-                std::bitset<CHAR_BIT * 4> bitset;
+                std::bitset<charSize * 4> bitset;
                 unsigned int counter(0U);
 
                 for(std::string::const_iterator jter(iter); jter != string_.end(); ++jter) {
                     counter += 1U;
-                    bitset <<= CHAR_BIT;
-                    bitset |= std::bitset<CHAR_BIT * 4>(std::bitset<CHAR_BIT>(*jter).to_ullong());
+                    bitset <<= charSize;
+                    bitset |= std::bitset<charSize * 4>(std::bitset<charSize>(*jter).to_ullong());
 
                     if(std::next(jter, 1) == string_.cend() or std::next(jter, 1) == std::next(iter, 4)) {
                         iter = jter;
@@ -4402,15 +4407,15 @@ namespace BinaryText
 
                 switch(counter) {
                     case 4U: counter = 0U; break;
-                    case 3U: bitset <<= CHAR_BIT; break;
-                    case 2U: bitset <<= (CHAR_BIT * 2); break;
-                    case 1U: bitset <<= (CHAR_BIT * 3); break;
+                    case 3U: bitset <<= charSize; break;
+                    case 2U: bitset <<= (charSize * 2); break;
+                    case 1U: bitset <<= (charSize * 3); break;
                     default: UnreachableTerminate();
                 }
 
-                if(bitset == std::bitset<CHAR_BIT * 4>(0B00000000000000000000000000000000ULL)) {
+                if(bitset == std::bitset<charSize * 4>(0B00000000000000000000000000000000ULL)) {
                     encodedString.append(1, 'z');
-                } else if(bitset == std::bitset<CHAR_BIT * 4>(0B00100000001000000010000000100000ULL) and foldSpaces_) {
+                } else if(bitset == std::bitset<charSize * 4>(0B00100000001000000010000000100000ULL) and foldSpaces_) {
                     encodedString.append(1, 'y');
                 } else {
                     unsigned long long bitsetNumber(bitset.to_ullong());
@@ -4464,13 +4469,13 @@ namespace BinaryText
             }
 
             for(typename ByteBuffer<ByteType>::ConstantIterator iter(byteBuffer_.ConstantBegin()); iter != byteBuffer_.ConstantEnd(); ++iter) {
-                std::bitset<CHAR_BIT * 4> bitset;
+                std::bitset<charSize * 4> bitset;
                 unsigned int counter(0U);
 
                 for(typename ByteBuffer<ByteType>::ConstantIterator jter(iter); jter != byteBuffer_.ConstantEnd(); ++jter) {
                     counter += 1U;
-                    bitset <<= CHAR_BIT;
-                    bitset |= std::bitset<CHAR_BIT>(static_cast<char>(*jter)).to_ullong();
+                    bitset <<= charSize;
+                    bitset |= std::bitset<charSize>(static_cast<char>(*jter)).to_ullong();
 
                     if(std::next(jter, 1) == byteBuffer_.ConstantEnd() or std::next(jter, 1) == std::next(iter, 4)) {
                         iter = jter;
@@ -4481,15 +4486,15 @@ namespace BinaryText
 
                 switch(counter) {
                     case 4U: counter = 0U; break;
-                    case 3U: bitset <<= CHAR_BIT; break;
-                    case 2U: bitset <<= (CHAR_BIT * 2); break;
-                    case 1U: bitset <<= (CHAR_BIT * 3); break;
+                    case 3U: bitset <<= charSize; break;
+                    case 2U: bitset <<= (charSize * 2); break;
+                    case 1U: bitset <<= (charSize * 3); break;
                     default: UnreachableTerminate();
                 }
 
-                if(bitset == std::bitset<CHAR_BIT * 4>(0B00000000000000000000000000000000ULL)) {
+                if(bitset == std::bitset<charSize * 4>(0B00000000000000000000000000000000ULL)) {
                     encodedString.append(1, 'z');
-                } else if(bitset == std::bitset<CHAR_BIT * 4>(0B00100000001000000010000000100000ULL) and foldSpaces_) {
+                } else if(bitset == std::bitset<charSize * 4>(0B00100000001000000010000000100000ULL) and foldSpaces_) {
                     encodedString.append(1, 'y');
                 } else {
                     unsigned long long bitsetNumber(bitset.to_ullong());
@@ -4600,7 +4605,7 @@ namespace BinaryText
                                     continue;
                                 }
                             } else {
-                                const unsigned long long partialBitsetNumber(std::bitset<CHAR_BIT>(*jter).to_ullong());
+                                const unsigned long long partialBitsetNumber(std::bitset<charSize>(*jter).to_ullong());
                                 counter += 1U;
 
                                 if(partialBitsetNumber < 33ULL or partialBitsetNumber > 117ULL) {
@@ -4645,31 +4650,31 @@ namespace BinaryText
                     counter = 5U - previousCounter;
                 }
 
-                const std::bitset<CHAR_BIT * 4> bitset(bitsetNumber);
+                const std::bitset<charSize * 4> bitset(bitsetNumber);
 
                 switch(counter) {
                     case 0U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> charSize).to_ullong())));
                         decodedString.append(1, static_cast<char>(static_cast<unsigned char>(bitset.to_ullong())));
 
                         break;
                     }
                     case 1U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> charSize).to_ullong())));
 
                         break;
                     }
                     case 2U: {
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong())));
-                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong())));
+                        decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong())));
 
                         break;
                     }
-                    case 3U: decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong()))); break;
+                    case 3U: decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong()))); break;
                     case 4U: break;
                     default: UnreachableTerminate();
                 }
@@ -4787,7 +4792,7 @@ namespace BinaryText
                                     continue;
                                 }
                             } else {
-                                const unsigned long long partialBitsetNumber(std::bitset<CHAR_BIT>(*jter).to_ullong());
+                                const unsigned long long partialBitsetNumber(std::bitset<charSize>(*jter).to_ullong());
                                 counter += 1U;
 
                                 if(partialBitsetNumber < 33ULL or partialBitsetNumber > 117ULL) {
@@ -4832,31 +4837,31 @@ namespace BinaryText
                     counter = 5U - previousCounter;
                 }
 
-                const std::bitset<CHAR_BIT * 4> bitset(bitsetNumber);
+                const std::bitset<charSize * 4> bitset(bitsetNumber);
 
                 switch(counter) {
                     case 0U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> charSize).to_ullong()));
                         addToByteBuffer(static_cast<unsigned char>(bitset.to_ullong()));
 
                         break;
                     }
                     case 1U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> CHAR_BIT).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> charSize).to_ullong()));
 
                         break;
                     }
                     case 2U: {
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong()));
-                        addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 2)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong()));
+                        addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 2)).to_ullong()));
 
                         break;
                     }
-                    case 3U: addToByteBuffer(static_cast<unsigned char>((bitset >> (CHAR_BIT * 3)).to_ullong())); break;
+                    case 3U: addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong())); break;
                     case 4U: break;
                     default: UnreachableTerminate();
                 }
