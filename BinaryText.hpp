@@ -46,7 +46,7 @@ For more information, please refer to <https://unlicense.org>
 #include <source_location> // std::source_location
 #include <stdexcept>       // std::length_error
 #include <string>          // std::string
-#include <type_traits>     // std::remove_const_t / std::add_const_t
+#include <type_traits>     // std::remove_const_t / std::add_const_t / std::is_same_v
 #include <utility>         // std::swap / std::move
 #include <vector>          // std::vector
 
