@@ -31,39 +31,49 @@ For more information, please refer to <https://unlicense.org>
 #include <array>           // std::array
 #include <bitset>          // std::bitset
 #include <cmath>           // std::ceil / std::floor
+#include <compare>         // std::strong_ordering
+#include <concepts>        // std::same_as
 #include <cstddef>         // std::size_t / std::ptrdiff_t
 #include <exception>       // std::terminate / std::exception
 #include <filesystem>      // std::filesystem::path
 #include <format>          // std::format
 #include <fstream>         // std::ifstream / std::ofstream
 #include <iostream>        // std::cerr / std::endl
-#include <iterator>        // std::contiguous_iterator_tag / std::contiguous_iterator / std::next / std::advance / std::prev
-#include <limits>          // std::numeric_limits::digits / std::numeric_limits::max
+#include <iterator>        // std::contiguous_iterator_tag / std::contiguous_iterator / std::next / std::advance / std::prev / std::distance
+#include <limits>          // std::numeric_limits
 #include <memory>          // std::unique_ptr / std::make_unique
 #include <new>             // std::bad_alloc
 #include <source_location> // std::source_location
 #include <stdexcept>       // std::length_error
 #include <string>          // std::string
-#include <type_traits>     // std::remove_const_t / std::disjunction_v / std::is_same_v / std::is_same
+#include <type_traits>     // std::remove_const_t / std::add_const_t
 #include <utility>         // std::swap / std::move
 #include <vector>          // std::vector
 
 /// @brief BinaryText namespace.
 namespace BinaryText
 {
-    /**
-     * This function will print information about where the function was called to stderr and terminate the program abruptly. 
-     * It is supposed to be used whenever a theoretically unreachable point was reached.
-     * 
-     * @param[in] sourceLocation_ The location at which this function was called from, the default argument should be used.
-    */
-    [[noreturn]] void UnreachableTerminate(const std::source_location sourceLocation_ = std::source_location::current()) noexcept
+    /// @brief Internal namespace. Only this header should use what is in here.
+    namespace Internal
     {
-        std::cerr << std::format("Something that should not have gone wrong went wrong and this function was called to terminate the program. This function "
-                                 "was called inside \"{}\" at function \"{}\", line {}, column {}",
-                                 sourceLocation_.file_name(), sourceLocation_.function_name(), sourceLocation_.line(), sourceLocation_.column())
-                  << std::endl;
-        std::terminate();
+        /**
+         * This function will print information about where the function was called to stderr and terminate the program abruptly. 
+         * It is supposed to be used whenever a theoretically unreachable point was reached.
+         * 
+         * @param[in] sourceLocation_ The location at which this function was called from, the default argument should be used.
+        */
+        [[noreturn]] void UnreachableTerminate(const std::source_location sourceLocation_ = std::source_location::current()) noexcept
+        {
+            std::cerr << std::format(
+                "Something that should not have gone wrong went wrong and this function was called to terminate the program. This function "
+                "was called inside \"{}\" at function \"{}\", line {}, column {}",
+                sourceLocation_.file_name(), sourceLocation_.function_name(), sourceLocation_.line(), sourceLocation_.column())
+                      << std::endl;
+            std::terminate();
+        }
+
+        /// @brief How many bits there are in a char on this platform.
+        constexpr int charSize = std::numeric_limits<unsigned char>::digits;
     }
 
     /**
@@ -71,14 +81,15 @@ namespace BinaryText
      * @tparam ByteType Either char, signed char, unsigned char or std::byte.
     */
     template<typename ByteType>
-    concept ByteBufferCompatible = std::disjunction_v<std::is_same<ByteType, char>, std::is_same<ByteType, signed char>, std::is_same<ByteType, unsigned char>,
-                                                      std::is_same<ByteType, std::byte>>;
+    concept ByteBufferCompatible =
+        std::same_as<ByteType, char> or std::same_as<ByteType, signed char> or std::same_as<ByteType, unsigned char> or std::same_as<ByteType, std::byte>;
 
     /**
      * @brief A class that is able to hold a buffer made up of bytes.
      * @tparam ByteType Type that satisfies the ByteBufferCompatible concept (char, signed char, unsigned char and std::byte).
     */
-    template<ByteBufferCompatible ByteType>
+    template<typename ByteType>
+        requires ByteBufferCompatible<ByteType>
     class ByteBuffer
     {
     public:
@@ -148,11 +159,13 @@ namespace BinaryText
         };
 
         /**
-         * @brief A base iterator class that can be used as a non-constant iterator or a constant one.
+         * An iterator class that can be used as a non-constant iterator or a constant one. 
+         * Note that using nullptr with this does not cause undefined behavior.
+         * 
          * @tparam ValueType Same as ByteType but can be constant.
         */
         template<typename ValueType>
-            requires std::is_same_v<std::remove_const_t<ValueType>, std::remove_const_t<ByteType>>
+            requires std::same_as<std::remove_const_t<ValueType>, ByteType>
         class BaseIterator
         {
         public:
@@ -167,49 +180,196 @@ namespace BinaryText
             using pointer = Pointer;
             using reference = Reference;
 
-            // clang-format off
+            BaseIterator() noexcept :
+                _failsafe(static_cast<ValueType>(0)),
+                _address(nullptr),
+                _failsafeAddress(&_failsafe)
+            {}
+            explicit BaseIterator(std::add_const_t<Pointer> address_) :
+                _failsafe(static_cast<ValueType>(0)),
+                _address(address_),
+                _failsafeAddress(&_failsafe)
+            {}
+            BaseIterator(std::add_const_t<ValueType> failsafe_, std::add_const_t<Pointer> address_) :
+                _failsafe(failsafe_),
+                _address(address_),
+                _failsafeAddress(&_failsafe)
+            {}
+            BaseIterator(const BaseIterator& iterator_) :
+                _failsafe(iterator_._failsafe),
+                _address(iterator_._address),
+                _failsafeAddress(&_failsafe)
+            {}
+            BaseIterator(BaseIterator&& iterator_) :
+                _failsafe(iterator_._failsafe),
+                _address(iterator_._address),
+                _failsafeAddress(&_failsafe)
+            {}
 
-            BaseIterator() noexcept : _address(nullptr) {}
-            explicit BaseIterator(const Pointer address_) : _address(address_) {}
+            Reference operator[](const DifferenceType position_) const { return (_address != nullptr) ? _address[position_] : *_failsafeAddress; }
+            Reference operator*() const { return (_address != nullptr) ? *_address : *_failsafeAddress; }
+            Pointer operator->() const { return (_address != nullptr) ? _address : _failsafeAddress; }
+            BaseIterator& operator=(std::add_const_t<Pointer> address_)
+            {
+                _address = address_;
 
-            Reference operator[](const DifferenceType position_) const { return _address[position_]; }
-            Reference operator*() const { return *_address; }
-            Pointer operator->() const { return _address; }
-            BaseIterator& operator=(const Pointer address_) { _address = address_; return *this; }
-            BaseIterator& operator+=(const DifferenceType difference_) { _address += difference_; return *this; }
-            BaseIterator& operator-=(const DifferenceType difference_) { _address -= difference_; return *this; }
-            BaseIterator& operator++() { _address++; return *this; }
-            BaseIterator& operator--() { _address--; return *this; }
-            BaseIterator operator++(int) { BaseIterator iterator(*this); ++_address; return iterator; }
-            BaseIterator operator--(int) { BaseIterator iterator(*this); --_address; return iterator; }
-            BaseIterator operator+(const DifferenceType difference_) const { BaseIterator iterator(*this); return iterator += difference_; }
-            BaseIterator operator-(const DifferenceType difference_) const { BaseIterator iterator(*this); return iterator -= difference_; }
-            friend BaseIterator operator+(const DifferenceType difference_, const BaseIterator& iterator_) { return iterator_ + difference_; }
-            friend BaseIterator operator-(const DifferenceType difference_, const BaseIterator& iterator_) { return iterator_ - difference_; }
-            DifferenceType operator-(const BaseIterator& iterator_) const { return std::distance(iterator_._address, _address); }
-            operator BaseIterator<const ValueType>() const requires std::is_same_v<ValueType, std::remove_const_t<ValueType>> { return BaseIterator<const ValueType>(_address); }
-            bool operator<(const BaseIterator& iterator_) const { return iterator_._address < _address; }
-            bool operator<=(const BaseIterator& iterator_) const { return iterator_._address <= _address; }
-            bool operator>(const BaseIterator& iterator_) const { return iterator_._address > _address; }
-            bool operator>=(const BaseIterator& iterator_) const { return iterator_._address >= _address; }
-            bool operator==(const BaseIterator& iterator_) const { return iterator_._address == _address; }
-            bool operator!=(const BaseIterator& iterator_) const { return iterator_._address != _address; }
+                return *this;
+            }
+            BaseIterator& operator=(const BaseIterator& iterator_)
+            {
+                _failsafe = iterator_._failsafe;
+                _address = iterator_._address;
 
-            // clang-format on
+                return *this;
+            }
+            BaseIterator& operator=(BaseIterator&& iterator_)
+            {
+                _failsafe = iterator_._failsafe;
+                _address = iterator_._address;
+
+                return *this;
+            }
+            BaseIterator& operator+=(const DifferenceType difference_)
+            {
+                if(_address != nullptr) _address += difference_;
+
+                return *this;
+            }
+            BaseIterator& operator-=(const DifferenceType difference_)
+            {
+                if(_address != nullptr) _address -= difference_;
+
+                return *this;
+            }
+            BaseIterator& operator++()
+            {
+                if(_address != nullptr) _address++;
+
+                return *this;
+            }
+            BaseIterator& operator--()
+            {
+                if(_address != nullptr) _address--;
+
+                return *this;
+            }
+            BaseIterator operator++(const int)
+            {
+                BaseIterator iterator(*this);
+
+                if(_address != nullptr) ++_address;
+
+                return iterator;
+            }
+            BaseIterator operator--(const int)
+            {
+                BaseIterator iterator(*this);
+
+                if(_address != nullptr) --_address;
+
+                return iterator;
+            }
+            BaseIterator operator+(const DifferenceType difference_) const
+            {
+                return (_address != nullptr) ? BaseIterator(_failsafe, _address + difference_) : *this;
+            }
+            BaseIterator operator-(const DifferenceType difference_) const
+            {
+                return (_address != nullptr) ? BaseIterator(_failsafe, _address - difference_) : *this;
+            }
+            friend BaseIterator operator+(const DifferenceType difference_, const BaseIterator& iterator_)
+            {
+                return (iterator_._address != nullptr) ? BaseIterator(iterator_._failsafe, iterator_._address + difference_) : iterator_;
+            }
+            DifferenceType operator-(const BaseIterator& iterator_) const
+            {
+                return (iterator_._address == nullptr or _address == nullptr) ? 0 : std::distance(iterator_._address, _address);
+            }
+            operator BaseIterator<const ValueType>() const
+                requires std::same_as<ValueType, std::remove_const_t<ValueType>>
+            {
+                return BaseIterator<const ValueType>(_failsafe, _address);
+            }
+            bool operator<(const BaseIterator& iterator_) const
+            {
+                if(_address == nullptr and iterator_._address == nullptr) {
+                    return false;
+                } else if(_address != nullptr and iterator_._address == nullptr) {
+                    return false;
+                } else if(_address == nullptr and iterator_._address != nullptr) {
+                    return true;
+                } else {
+                    return _address < iterator_._address;
+                }
+            }
+            bool operator>(const BaseIterator& iterator_) const
+            {
+                if(_address == nullptr and iterator_._address == nullptr) {
+                    return false;
+                } else if(_address != nullptr and iterator_._address == nullptr) {
+                    return true;
+                } else if(_address == nullptr and iterator_._address != nullptr) {
+                    return false;
+                } else {
+                    return _address > iterator_._address;
+                }
+            }
+            bool operator<=(const BaseIterator& iterator_) const
+            {
+                if(_address == nullptr and iterator_._address == nullptr) {
+                    return true;
+                } else if(_address != nullptr and iterator_._address == nullptr) {
+                    return false;
+                } else if(_address == nullptr and iterator_._address != nullptr) {
+                    return true;
+                } else {
+                    return _address <= iterator_._address;
+                }
+            }
+            bool operator>=(const BaseIterator& iterator_) const
+            {
+                if(_address == nullptr and iterator_._address == nullptr) {
+                    return true;
+                } else if(_address != nullptr and iterator_._address == nullptr) {
+                    return true;
+                } else if(_address == nullptr and iterator_._address != nullptr) {
+                    return false;
+                } else {
+                    return _address >= iterator_._address;
+                }
+            }
+            bool operator==(const BaseIterator& iterator_) const { return _address == iterator_._address; }
+            bool operator!=(const BaseIterator& iterator_) const { return _address != iterator_._address; }
+            std::strong_ordering operator<=>(const BaseIterator& iterator_) const
+            {
+                if(_address == nullptr and iterator_._address == nullptr) {
+                    return std::strong_ordering::equivalent;
+                } else if(_address != nullptr and iterator_._address == nullptr) {
+                    return std::strong_ordering::greater;
+                } else if(_address == nullptr and iterator_._address != nullptr) {
+                    return std::strong_ordering::less;
+                } else {
+                    return _address <=> iterator_._address;
+                }
+            }
 
         private:
+            typename std::remove_const_t<ValueType> _failsafe;
             Pointer _address;
+            Pointer _failsafeAddress;
         };
 
         static_assert(std::contiguous_iterator<BaseIterator<ByteType>>);
         static_assert(std::contiguous_iterator<BaseIterator<const ByteType>>);
 
         /**
-         * @brief A base reverse iterator class that can be used as a non-constant rerverse iterator or a constant reverse one.
+         * A reverse iterator class that can be used as a non-constant rerverse iterator or a constant reverse one.
+         * Note that using nullptr with this does not cause undefined behavior.
+         * 
          * @tparam ValueType Same as ByteType but can be constant.
         */
         template<typename ValueType>
-            requires std::is_same_v<std::remove_const_t<ValueType>, std::remove_const_t<ByteType>>
+            requires std::same_as<std::remove_const_t<ValueType>, ByteType>
         class BaseReverseIterator
         {
         public:
@@ -224,41 +384,189 @@ namespace BinaryText
             using pointer = Pointer;
             using reference = Reference;
 
-            // clang-format off
+            BaseReverseIterator() noexcept :
+                _failsafe(static_cast<ValueType>(0)),
+                _address(nullptr),
+                _failsafeAddress(&_failsafe)
+            {}
+            explicit BaseReverseIterator(std::add_const_t<Pointer> address_) :
+                _failsafe(static_cast<ValueType>(0)),
+                _address(address_),
+                _failsafeAddress(&_failsafe)
+            {}
+            BaseReverseIterator(std::add_const_t<ValueType> failsafe_, std::add_const_t<Pointer> address_) :
+                _failsafe(failsafe_),
+                _address(address_),
+                _failsafeAddress(&_failsafe)
+            {}
+            BaseReverseIterator(const BaseReverseIterator& iterator_) :
+                _failsafe(iterator_._failsafe),
+                _address(iterator_._address),
+                _failsafeAddress(&_failsafe)
+            {}
+            BaseReverseIterator(BaseReverseIterator&& iterator_) :
+                _failsafe(iterator_._failsafe),
+                _address(iterator_._address),
+                _failsafeAddress(&_failsafe)
+            {}
 
-            BaseReverseIterator() noexcept : _address(nullptr) {}
-            explicit BaseReverseIterator(const Pointer address_) : _address(address_) {}
+            BaseIterator<ValueType> Base() const { return ++BaseIterator<ValueType>(_failsafe, _address - 1); }
 
-            BaseIterator<ValueType> Base() const { BaseIterator<ValueType> iterator(_address); return ++iterator; }
-            BaseIterator<ValueType> base() const { BaseIterator<ValueType> iterator(_address); return ++iterator; }
+            Reference operator[](const DifferenceType position_) const { return (_address != nullptr) ? *((_address - position_) - 1) : *_failsafeAddress; }
+            Reference operator*() const { return (_address != nullptr) ? *(_address - 1) : *_failsafeAddress; }
+            Pointer operator->() const { return (_address != nullptr) ? (_address - 1) : _failsafeAddress; }
+            BaseReverseIterator& operator=(std::add_const_t<Pointer> address_)
+            {
+                _address = address_;
 
-            Reference operator[](const DifferenceType position_) const { return _address[position_]; }
-            Reference operator*() const { return *_address; }
-            Pointer operator->() const { return _address; }
-            BaseReverseIterator& operator=(const Pointer address_) { _address = address_; return *this; }
-            BaseReverseIterator& operator+=(const DifferenceType difference_) { _address -= difference_; return *this; }
-            BaseReverseIterator& operator-=(const DifferenceType difference_) { _address += difference_; return *this; }
-            BaseReverseIterator& operator++() { _address--; return *this; }
-            BaseReverseIterator& operator--() { _address++; return *this; }
-            BaseReverseIterator operator++(int) { BaseReverseIterator iterator(*this); --_address; return iterator; }
-            BaseReverseIterator operator--(int) { BaseReverseIterator iterator(*this); ++_address; return iterator; }
-            BaseReverseIterator operator+(const DifferenceType difference_) const { BaseReverseIterator iterator(*this); return iterator -= difference_; }
-            BaseReverseIterator operator-(const DifferenceType difference_) const { BaseReverseIterator iterator(*this); return iterator += difference_; }
-            friend BaseReverseIterator operator+(const DifferenceType difference_, const BaseReverseIterator& iterator_) { return iterator_ - difference_; }
-            friend BaseReverseIterator operator-(const DifferenceType difference_, const BaseReverseIterator& iterator_) { return iterator_ + difference_; }
-            DifferenceType operator-(const BaseReverseIterator& iterator_) const { return std::distance(_address, iterator_._address); }
-            operator BaseReverseIterator<const ValueType>() const requires std::is_same_v<ValueType, std::remove_const_t<ValueType>> { return BaseReverseIterator<const ValueType>(_address); }
-            bool operator<(const BaseReverseIterator& iterator_) const { return iterator_._address < _address; }
-            bool operator<=(const BaseReverseIterator& iterator_) const { return iterator_._address <= _address; }
-            bool operator>(const BaseReverseIterator& iterator_) const { return iterator_._address > _address; }
-            bool operator>=(const BaseReverseIterator& iterator_) const { return iterator_._address >= _address; }
+                return *this;
+            }
+            BaseReverseIterator& operator=(const BaseReverseIterator& iterator_)
+            {
+                _failsafe = iterator_._failsafe;
+                _address = iterator_._address;
+
+                return *this;
+            }
+            BaseReverseIterator& operator=(BaseReverseIterator&& iterator_)
+            {
+                _failsafe = iterator_._failsafe;
+                _address = iterator_._address;
+
+                return *this;
+            }
+            BaseReverseIterator& operator+=(const DifferenceType difference_)
+            {
+                if(_address != nullptr) _address -= difference_;
+
+                return *this;
+            }
+            BaseReverseIterator& operator-=(const DifferenceType difference_)
+            {
+                if(_address != nullptr) _address += difference_;
+
+                return *this;
+            }
+            BaseReverseIterator& operator++()
+            {
+                if(_address != nullptr) _address--;
+
+                return *this;
+            }
+            BaseReverseIterator& operator--()
+            {
+                if(_address != nullptr) _address++;
+
+                return *this;
+            }
+            BaseReverseIterator operator++(const int)
+            {
+                BaseReverseIterator iterator(*this);
+
+                if(_address != nullptr) --_address;
+
+                return iterator;
+            }
+            BaseReverseIterator operator--(const int)
+            {
+                BaseReverseIterator iterator(*this);
+
+                if(_address != nullptr) ++_address;
+
+                return iterator;
+            }
+            BaseReverseIterator operator+(const DifferenceType difference_) const
+            {
+                return (_address != nullptr) ? BaseReverseIterator(_failsafe, _address - difference_) : *this;
+            }
+            BaseReverseIterator operator-(const DifferenceType difference_) const
+            {
+                return (_address != nullptr) ? BaseReverseIterator(_failsafe, _address + difference_) : *this;
+            }
+            friend BaseReverseIterator operator+(const DifferenceType difference_, const BaseReverseIterator& iterator_)
+            {
+                return (iterator_._address != nullptr) ? BaseReverseIterator(iterator_._failsafe, iterator_._address - difference_) : iterator_;
+            }
+            DifferenceType operator-(const BaseReverseIterator& iterator_) const
+            {
+                return (iterator_._address == nullptr or _address == nullptr) ? 0 : std::distance(_address, iterator_._address);
+            }
+            operator BaseReverseIterator<const ValueType>() const
+                requires std::same_as<ValueType, std::remove_const_t<ValueType>>
+            {
+                return BaseReverseIterator<const ValueType>(_failsafe, _address);
+            }
+            bool operator<(const BaseReverseIterator& iterator_) const
+            {
+                if(iterator_._address == nullptr and _address == nullptr) {
+                    return false;
+                } else if(iterator_._address != nullptr and _address == nullptr) {
+                    return false;
+                } else if(iterator_._address == nullptr and _address != nullptr) {
+                    return true;
+                } else {
+                    return iterator_._address < _address;
+                }
+            }
+            bool operator>(const BaseReverseIterator& iterator_) const
+            {
+                if(iterator_._address == nullptr and _address == nullptr) {
+                    return false;
+                } else if(iterator_._address != nullptr and _address == nullptr) {
+                    return true;
+                } else if(iterator_._address == nullptr and _address != nullptr) {
+                    return false;
+                } else {
+                    return iterator_._address > _address;
+                }
+            }
+            bool operator<=(const BaseReverseIterator& iterator_) const
+            {
+                if(iterator_._address == nullptr and _address == nullptr) {
+                    return true;
+                } else if(iterator_._address != nullptr and _address == nullptr) {
+                    return false;
+                } else if(iterator_._address == nullptr and _address != nullptr) {
+                    return true;
+                } else {
+                    return iterator_._address <= _address;
+                }
+            }
+            bool operator>=(const BaseReverseIterator& iterator_) const
+            {
+                if(iterator_._address == nullptr and _address == nullptr) {
+                    return true;
+                } else if(iterator_._address != nullptr and _address == nullptr) {
+                    return true;
+                } else if(iterator_._address == nullptr and _address != nullptr) {
+                    return false;
+                } else {
+                    return iterator_._address >= _address;
+                }
+            }
             bool operator==(const BaseReverseIterator& iterator_) const { return iterator_._address == _address; }
             bool operator!=(const BaseReverseIterator& iterator_) const { return iterator_._address != _address; }
+            std::strong_ordering operator<=>(const BaseReverseIterator& iterator_) const
+            {
+                if(iterator_._address == nullptr and _address == nullptr) {
+                    return std::strong_ordering::equivalent;
+                } else if(iterator_._address != nullptr and _address == nullptr) {
+                    return std::strong_ordering::greater;
+                } else if(iterator_._address == nullptr and _address != nullptr) {
+                    return std::strong_ordering::less;
+                } else {
+                    return iterator_._address <=> _address;
+                }
+            }
 
-            // clang-format on
+            // For C++ compatibility purposes
+
+            BaseIterator<ValueType> base() const { return ++BaseIterator<ValueType>(_failsafe, _address - 1); }
 
         private:
+            typename std::remove_const_t<ValueType> _failsafe;
             Pointer _address;
+            Pointer _failsafeAddress;
         };
 
         static_assert(std::contiguous_iterator<BaseReverseIterator<ByteType>>);
@@ -297,7 +605,7 @@ namespace BinaryText
                     _buffer = std::make_unique<ValueType[]>(_size);
 
                     std::fill(_buffer.get(), _buffer.get() + _size, static_cast<ValueType>(0));
-                } catch(const std::bad_alloc& error) {
+                } catch(const std::bad_alloc&) {
                     _size = 0;
                     _buffer = nullptr;
 
@@ -331,7 +639,7 @@ namespace BinaryText
                     _buffer = std::make_unique<ValueType[]>(_size);
 
                     std::copy(buffer_, buffer_ + _size, _buffer.get());
-                } catch(const std::bad_alloc& error) {
+                } catch(const std::bad_alloc&) {
                     _size = 0;
                     _buffer = nullptr;
 
@@ -344,7 +652,10 @@ namespace BinaryText
          * @param[in] vector_ Vector to be copied.
          * @throws BinaryText::ByteBuffer::Error
         */
-        explicit ByteBuffer(const std::vector<ValueType>& vector_) :
+        explicit ByteBuffer(const std::vector<ValueType>& vector_)
+            requires std::same_as<SizeType, typename std::vector<ValueType>::size_type>
+                         and std::same_as<DifferenceType, typename std::vector<ValueType>::difference_type>
+            :
             _size(0),
             _buffer(nullptr)
         {
@@ -357,7 +668,7 @@ namespace BinaryText
                     _buffer = std::make_unique<ValueType[]>(_size);
 
                     std::copy(vector_.cbegin(), vector_.cend(), _buffer.get());
-                } catch(const std::bad_alloc& error) {
+                } catch(const std::bad_alloc&) {
                     _size = 0;
                     _buffer = nullptr;
 
@@ -370,7 +681,12 @@ namespace BinaryText
          * @param[in] filePath_ Path to file
          * @throws BinaryText::ByteBuffer::Error
         */
-        explicit ByteBuffer(const std::filesystem::path& filePath_) { ReadFromFile(filePath_); }
+        explicit ByteBuffer(const std::filesystem::path& filePath_) :
+            _size(0),
+            _buffer(nullptr)
+        {
+            ReadFromFile(filePath_);
+        }
         /**
          * @brief Copy constructor of ByteBuffer.
          * @param[in] byteBuffer_ ByteBuffer to be copied.
@@ -386,7 +702,7 @@ namespace BinaryText
                     _buffer = std::make_unique<ValueType[]>(_size);
 
                     std::copy(byteBuffer_._buffer.get(), byteBuffer_._buffer.get() + _size, _buffer.get());
-                } catch(const std::bad_alloc& error) {
+                } catch(const std::bad_alloc&) {
                     _size = 0;
                     _buffer = nullptr;
 
@@ -416,7 +732,7 @@ namespace BinaryText
             if(_buffer != nullptr) {
                 try {
                     std::fill(_buffer.get(), _buffer.get() + _size, byte_);
-                } catch(const std::bad_alloc& error) {
+                } catch(const std::bad_alloc&) {
                     _size = 0;
                     _buffer = nullptr;
 
@@ -515,7 +831,7 @@ namespace BinaryText
 
                         std::fill(_buffer.get() + previousSize, _buffer.get() + _size, static_cast<ValueType>(0));
                     }
-                } catch(const std::bad_alloc& error) {
+                } catch(const std::bad_alloc&) {
                     _size = 0;
                     _buffer = nullptr;
 
@@ -558,7 +874,7 @@ namespace BinaryText
 
                         std::fill(_buffer.get() + previousSize, _buffer.get() + _size, byte_);
                     }
-                } catch(const std::bad_alloc& error) {
+                } catch(const std::bad_alloc&) {
                     _size = 0;
                     _buffer = nullptr;
 
@@ -645,7 +961,7 @@ namespace BinaryText
                                 chunk = std::make_unique<ValueType[]>(8192);
 
                                 std::copy(_buffer.get() + (8192 * i), _buffer.get() + (8192 * i) + 8192, chunk.get());
-                            } catch(const std::bad_alloc& error) {
+                            } catch(const std::bad_alloc&) {
                                 throw Error(Error::Type::ALLOCATION_ERROR);
                             }
 
@@ -667,14 +983,14 @@ namespace BinaryText
                                 chunk = std::make_unique<ValueType[]>(lastChunkSize);
 
                                 std::copy(_buffer.get() + (8192 * chunkAmount), _buffer.get() + ((8192 * chunkAmount) + lastChunkSize), chunk.get());
-                            } catch(const std::bad_alloc& error) {
+                            } catch(const std::bad_alloc&) {
                                 throw Error(Error::Type::ALLOCATION_ERROR);
                             }
 
                             if constexpr(std::is_same_v<ValueType, char>) {
                                 fileStream.write(chunk.get(), lastChunkSize);
                             } else {
-                                fileStream.write(reinterpret_cast<char*>(chunk.get()), lastChunkSize);
+                                fileStream.write(reinterpret_cast<char*>(chunk.get()), static_cast<std::streamsize>(lastChunkSize));
                             }
 
                             if(fileStream.fail()) {
@@ -688,14 +1004,14 @@ namespace BinaryText
                             chunk = std::make_unique<ValueType[]>(_size);
 
                             std::copy(_buffer.get(), _buffer.get() + _size, chunk.get());
-                        } catch(const std::bad_alloc& error) {
+                        } catch(const std::bad_alloc&) {
                             throw Error(Error::Type::ALLOCATION_ERROR);
                         }
 
                         if constexpr(std::is_same_v<ValueType, char>) {
                             fileStream.write(chunk.get(), _size);
                         } else {
-                            fileStream.write(reinterpret_cast<char*>(chunk.get()), _size);
+                            fileStream.write(reinterpret_cast<char*>(chunk.get()), static_cast<std::streamsize>(_size));
                         }
 
                         if(fileStream.fail()) {
@@ -714,6 +1030,8 @@ namespace BinaryText
          * @returns The converted std::vector.
         */
         std::vector<ValueType> ToVector() const
+            requires std::same_as<SizeType, typename std::vector<ValueType>::size_type>
+            and std::same_as<DifferenceType, typename std::vector<ValueType>::difference_type>
         {
             if(_buffer != nullptr) {
                 return std::vector<ValueType>(_buffer.get(), _buffer.get() + _size);
@@ -725,62 +1043,71 @@ namespace BinaryText
          * @brief Gets an iterator that points to the beginning of the ByteBuffer.
          * @returns Iterator that points to the beginning of the ByteBuffer.
         */
-        Iterator Begin() noexcept { return Iterator(&_buffer[0]); }
+        Iterator Begin() noexcept { return (_buffer != nullptr) ? Iterator(&_buffer[0]) : Iterator(); }
         /**
          * @brief Gets an iterator that points to the end of the ByteBuffer.
          * @returns Iterator that points to the end of the ByteBuffer.
         */
-        Iterator End() noexcept { return Iterator(&_buffer[_size]); }
+        Iterator End() noexcept { return (_buffer != nullptr) ? Iterator(&_buffer[_size]) : Iterator(); }
         /**
          * @brief Gets a constant iterator that points to the beginning of the ByteBuffer.
          * @returns Constant iterator that points to the beginning of the ByteBuffer.
         */
-        ConstantIterator Begin() const noexcept { return ConstantIterator(&_buffer[0]); }
+        ConstantIterator Begin() const noexcept { return (_buffer != nullptr) ? ConstantIterator(&_buffer[0]) : ConstantIterator(); }
         /**
          * @brief Gets a constant iterator that points to the end of the ByteBuffer.
          * @returns Constant iterator that points to the end of the ByteBuffer.
         */
-        ConstantIterator End() const noexcept { return ConstantIterator(&_buffer[_size]); }
+        ConstantIterator End() const noexcept { return (_buffer != nullptr) ? ConstantIterator(&_buffer[_size]) : ConstantIterator(); }
         /**
          * @brief Gets a constant iterator that points to the beginning of the ByteBuffer.
          * @returns Constant iterator that points to the beginning of the ByteBuffer.
         */
-        ConstantIterator ConstantBegin() const noexcept { return ConstantIterator(&_buffer[0]); }
+        ConstantIterator ConstantBegin() const noexcept { return (_buffer != nullptr) ? ConstantIterator(&_buffer[0]) : ConstantIterator(); }
         /**
          * @brief Gets a constant iterator that points to the end of the ByteBuffer.
          * @returns Constant iterator that points to the end of the ByteBuffer.
         */
-        ConstantIterator ConstantEnd() const noexcept { return ConstantIterator(&_buffer[_size]); }
+        ConstantIterator ConstantEnd() const noexcept { return (_buffer != nullptr) ? ConstantIterator(&_buffer[_size]) : ConstantIterator(); }
         /**
          * @brief Gets a reverse iterator that points to the beginning of the ByteBuffer.
          * @returns Reverse iterator that points to the beginning of the ByteBuffer.
         */
-        ReverseIterator ReverseBegin() noexcept { return ReverseIterator(&_buffer[(_size > 0) ? (_size - 1) : -1]); }
+        ReverseIterator ReverseBegin() noexcept { return (_buffer != nullptr) ? ReverseIterator(&_buffer[_size]) : ReverseIterator(); }
         /**
          * @brief Gets a reverse iterator that points to the end of the ByteBuffer.
          * @returns Reverse iterator that points to the end of the ByteBuffer.
         */
-        ReverseIterator ReverseEnd() noexcept { return ReverseIterator(&_buffer[-1]); }
+        ReverseIterator ReverseEnd() noexcept { return (_buffer != nullptr) ? ReverseIterator(&_buffer[0]) : ReverseIterator(); }
         /**
          * @brief Gets a constant reverse iterator that points to the beginning of the ByteBuffer.
          * @returns Constant reverse iterator that points to the beginning of the ByteBuffer.
         */
-        ConstantReverseIterator ReverseBegin() const noexcept { return ConstantReverseIterator(&_buffer[(_size > 0) ? (_size - 1) : -1]); }
+        ConstantReverseIterator ReverseBegin() const noexcept
+        {
+            return (_buffer != nullptr) ? ConstantReverseIterator(&_buffer[_size]) : ConstantReverseIterator();
+        }
         /**
          * @brief Gets a constant reverse iterator that points to the end of the ByteBuffer.
          * @returns Constant reverse iterator that points to the end of the ByteBuffer.
         */
-        ConstantReverseIterator ReverseEnd() const noexcept { return ConstantReverseIterator(&_buffer[-1]); }
+        ConstantReverseIterator ReverseEnd() const noexcept { return (_buffer != nullptr) ? ConstantReverseIterator(&_buffer[0]) : ConstantReverseIterator(); }
         /**
          * @brief Gets a constant reverse iterator that points to the beginning of the ByteBuffer.
          * @returns Constant reverse iterator that points to the beginning of the ByteBuffer.
         */
-        ConstantReverseIterator ConstantReverseBegin() const noexcept { return ConstantReverseIterator(&_buffer[(_size > 0) ? (_size - 1) : -1]); }
+        ConstantReverseIterator ConstantReverseBegin() const noexcept
+        {
+            return (_buffer != nullptr) ? ConstantReverseIterator(&_buffer[_size]) : ConstantReverseIterator();
+        }
         /**
          * @brief Gets a constant reverse iterator that points to the end of the ByteBuffer.
          * @returns Constant reverse iterator that points to the end of the ByteBuffer.
         */
-        ConstantReverseIterator ConstantReverseEnd() const noexcept { return ConstantReverseIterator(&_buffer[-1]); }
+        ConstantReverseIterator ConstantReverseEnd() const noexcept
+        {
+            return (_buffer != nullptr) ? ConstantReverseIterator(&_buffer[0]) : ConstantReverseIterator();
+        }
 
         /**
          * @brief Copy assignment operator of ByteBuffer.
@@ -799,7 +1126,7 @@ namespace BinaryText
                         _buffer = std::make_unique<ValueType[]>(_size);
 
                         std::copy(byteBuffer_._buffer.get(), byteBuffer_._buffer.get() + _size, _buffer.get());
-                    } catch(const std::bad_alloc& error) {
+                    } catch(const std::bad_alloc&) {
                         _size = 0;
                         _buffer = nullptr;
 
@@ -855,7 +1182,7 @@ namespace BinaryText
 
                             std::copy(_buffer.get(), _buffer.get() + _size, nextBuffer.get());
                             std::copy(byteBuffer_._buffer.get(), byteBuffer_._buffer.get() + byteBuffer_._size, nextBuffer.get() + _size);
-                        } catch(const std::bad_alloc& error) {
+                        } catch(const std::bad_alloc&) {
                             _size = 0;
                             _buffer = nullptr;
 
@@ -906,10 +1233,7 @@ namespace BinaryText
 
                             std::copy(_buffer.get(), _buffer.get() + _size, nextBuffer.get());
                             std::copy(byteBuffer_._buffer.get(), byteBuffer_._buffer.get() + byteBuffer_._size, nextBuffer.get() + _size);
-                        } catch(const std::bad_alloc& error) {
-                            _size = 0;
-                            _buffer = nullptr;
-
+                        } catch(const std::bad_alloc&) {
                             throw Error(Error::Type::ALLOCATION_ERROR);
                         }
 
@@ -964,7 +1288,7 @@ namespace BinaryText
          * @brief Inequality operator of ByteBuffer.
          * @param[in] byteBuffer_ ByteBuffer to compare with.
         */
-        bool operator!=(const ByteBuffer& byteBuffer_) const noexcept { return not(operator==(byteBuffer_)); }
+        bool operator!=(const ByteBuffer& byteBuffer_) const noexcept { return not operator==(byteBuffer_); }
         /**
          * @brief Gets non-constant reference to a position in the ByteBuffer.
          * @param[in] position_ Position to be accessed.
@@ -1010,18 +1334,18 @@ namespace BinaryText
         const value_type* data() const noexcept { return _buffer.get(); }
         void swap(ByteBuffer& byteBuffer_) noexcept { std::swap(_size, byteBuffer_._size); std::swap(_buffer, byteBuffer_._buffer); }
         friend void swap(ByteBuffer& first_, ByteBuffer& second_) noexcept { std::swap(first_._size, second_._size); std::swap(first_._buffer, second_._buffer); }
-        iterator begin() noexcept { return iterator(&_buffer[0]); }
-        iterator end() noexcept { return iterator(&_buffer[_size]); }
-        const_iterator begin() const noexcept { return const_iterator(&_buffer[0]); }
-        const_iterator end() const noexcept { return const_iterator(&_buffer[_size]); }
-        const_iterator cbegin() const noexcept { return const_iterator(&_buffer[0]); }
-        const_iterator cend() const noexcept { return const_iterator(&_buffer[_size]); }
-        reverse_iterator rbegin() noexcept { return reverse_iterator(&_buffer[(_size > 0) ? (_size - 1) : -1]); }
-        reverse_iterator rend() noexcept { return reverse_iterator(&_buffer[-1]); }
-        const_reverse_iterator rbegin() const noexcept { return const_reverse_iterator(&_buffer[(_size > 0) ? (_size - 1) : -1]); }
-        const_reverse_iterator rend() const noexcept { return const_reverse_iterator(&_buffer[-1]); }
-        const_reverse_iterator crbegin() const noexcept { return const_reverse_iterator(&_buffer[(_size > 0) ? (_size - 1) : -1]); }
-        const_reverse_iterator crend() const noexcept { return const_reverse_iterator(&_buffer[-1]); }
+        iterator begin() noexcept { return (_buffer != nullptr) ? iterator(&_buffer[0]) : iterator(); }
+        iterator end() noexcept { return (_buffer != nullptr) ? iterator(&_buffer[_size]) : iterator(); }
+        const_iterator begin() const noexcept { return (_buffer != nullptr) ? const_iterator(&_buffer[0]) : const_iterator(); }
+        const_iterator end() const noexcept { return (_buffer != nullptr) ? const_iterator(&_buffer[_size]) : const_iterator(); }
+        const_iterator cbegin() const noexcept { return (_buffer != nullptr) ? const_iterator(&_buffer[0]) : const_iterator(); }
+        const_iterator cend() const noexcept { return (_buffer != nullptr) ? const_iterator(&_buffer[_size]) : const_iterator(); }
+        reverse_iterator rbegin() noexcept { return (_buffer != nullptr) ? reverse_iterator(&_buffer[_size]) : reverse_iterator(); }
+        reverse_iterator rend() noexcept { return (_buffer != nullptr) ? reverse_iterator(&_buffer[0]) : reverse_iterator(); }
+        const_reverse_iterator rbegin() const noexcept { return (_buffer != nullptr) ? const_reverse_iterator(&_buffer[_size]) : const_reverse_iterator(); }
+        const_reverse_iterator rend() const noexcept { return (_buffer != nullptr) ? const_reverse_iterator(&_buffer[0]) : const_reverse_iterator(); }
+        const_reverse_iterator crbegin() const noexcept { return (_buffer != nullptr) ? const_reverse_iterator(&_buffer[_size]) : const_reverse_iterator(); }
+        const_reverse_iterator crend() const noexcept { return (_buffer != nullptr) ? const_reverse_iterator(&_buffer[0]) : const_reverse_iterator(); }
 
         // clang-format on
 
@@ -1030,8 +1354,15 @@ namespace BinaryText
         std::unique_ptr<ValueType[]> _buffer;
     };
 
-    /// @brief How many bits there are in a char on this platform.
-    constexpr int charSize = std::numeric_limits<unsigned char>::digits;
+    /**
+     * A concept that only accepts types supported by ByteBuffer.
+     * Additionally the given ByteBuffer's SizeType and DifferenceType must match std::string::size_type and std::string::difference_type respectively.
+     * 
+     * @tparam ByteType Either char, signed char, unsigned char or std::byte.
+    */
+    template<typename ByteType>
+    concept ByteBufferStringCompatible = ByteBufferCompatible<ByteType> and std::same_as<typename ByteBuffer<ByteType>::SizeType, std::string::size_type>
+        and std::same_as<typename ByteBuffer<ByteType>::DifferenceType, std::string::difference_type>;
 
     /// @brief A namespace that has functions that implement Base16 encoding and decoding in accordance to RFC 4648 §8.
     namespace Base16
@@ -1099,7 +1430,7 @@ namespace BinaryText
             UPPERCASE  ///< Uppercase (example: 7A7A).
         };
 
-        static_assert(charSize == 8, "These Base16 functions only works if a char is 8 bits big");
+        static_assert(Internal::charSize == 8, "These Base16 functions only works if a char is 8 bits big");
 
         /**
          * @brief Encodes a not-encoded string into a Base16 encoded string.
@@ -1109,18 +1440,20 @@ namespace BinaryText
         */
         std::string EncodeStringToString(const std::string& string_, const Case case_ = Case::UPPERCASE)
         {
+            using Internal::charSize;
+
             std::string encodedString;
 
             try {
                 if(string_.size() > 0) {
                     encodedString.reserve(string_.size() * 2);
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
             for(std::string::const_iterator iter(string_.cbegin()); iter != string_.cend(); ++iter) {
-                std::bitset<charSize> bitset(*iter);
+                std::bitset<charSize> bitset(static_cast<unsigned char>(*iter));
 
                 for(unsigned int i(0U); i < 2U; ++i) {
                     std::bitset<charSize / 2> partialBitset;
@@ -1150,7 +1483,7 @@ namespace BinaryText
                                 case 0B1101ULL: encodedString.append(1, 'D'); break;
                                 case 0B1110ULL: encodedString.append(1, 'E'); break;
                                 case 0B1111ULL: encodedString.append(1, 'F'); break;
-                                default: UnreachableTerminate();
+                                default: Internal::UnreachableTerminate();
                             }
 
                             break;
@@ -1173,7 +1506,7 @@ namespace BinaryText
                                 case 0B1101ULL: encodedString.append(1, 'd'); break;
                                 case 0B1110ULL: encodedString.append(1, 'e'); break;
                                 case 0B1111ULL: encodedString.append(1, 'f'); break;
-                                default: UnreachableTerminate();
+                                default: Internal::UnreachableTerminate();
                             }
 
                             break;
@@ -1189,26 +1522,29 @@ namespace BinaryText
         /**
          * @brief Encodes a ByteBuffer into a Base16 encoded string.
          * @tparam ByteType Type that satisfies the ByteBufferCompatible concept (char, signed char, unsigned char and std::byte).
-         * @param[in] string_ String to be encoded.
+         * @param[in] byteBuffer_ ByteBuffer to be encoded.
          * @param[in] case_ Case to be used (mixed case not supported).
          * @throws BinaryText::Base16::Error
          * @throws BinaryText::ByteBuffer::Error
         */
-        template<ByteBufferCompatible ByteType>
+        template<typename ByteType>
+            requires ByteBufferStringCompatible<ByteType>
         std::string EncodeByteBufferToString(const ByteBuffer<ByteType>& byteBuffer_, const Case case_ = Case::UPPERCASE)
         {
+            using Internal::charSize;
+
             std::string encodedString;
 
             try {
                 if(byteBuffer_.GetSize() > 0) {
                     encodedString.reserve(byteBuffer_.GetSize() * 2);
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
             for(typename ByteBuffer<ByteType>::ConstantIterator iter(byteBuffer_.ConstantBegin()); iter != byteBuffer_.ConstantEnd(); ++iter) {
-                std::bitset<charSize> bitset(static_cast<char>(*iter));
+                std::bitset<charSize> bitset(static_cast<unsigned char>(*iter));
 
                 for(unsigned int i(0U); i < 2U; ++i) {
                     std::bitset<charSize / 2> partialBitset;
@@ -1238,7 +1574,7 @@ namespace BinaryText
                                 case 0B1101ULL: encodedString.append(1, 'D'); break;
                                 case 0B1110ULL: encodedString.append(1, 'E'); break;
                                 case 0B1111ULL: encodedString.append(1, 'F'); break;
-                                default: UnreachableTerminate();
+                                default: Internal::UnreachableTerminate();
                             }
 
                             break;
@@ -1261,7 +1597,7 @@ namespace BinaryText
                                 case 0B1101ULL: encodedString.append(1, 'd'); break;
                                 case 0B1110ULL: encodedString.append(1, 'e'); break;
                                 case 0B1111ULL: encodedString.append(1, 'f'); break;
-                                default: UnreachableTerminate();
+                                default: Internal::UnreachableTerminate();
                             }
 
                             break;
@@ -1282,13 +1618,15 @@ namespace BinaryText
         */
         std::string DecodeStringToString(const std::string& encodedString_, const Case case_ = Case::MIXED)
         {
+            using Internal::charSize;
+
             std::string decodedString;
 
             try {
                 if(encodedString_.size() > 0) {
                     decodedString.reserve(encodedString_.size() / 2);
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -1402,7 +1740,7 @@ namespace BinaryText
                     switch(counter) {
                         case 2U: break;
                         case 1U: bitset <<= charSize / 2; break;
-                        default: UnreachableTerminate();
+                        default: Internal::UnreachableTerminate();
                     }
 
                     decodedString.append(1, static_cast<char>(static_cast<unsigned char>(bitset.to_ullong())));
@@ -1419,9 +1757,12 @@ namespace BinaryText
          * @throws BinaryText::Base16::Error
          * @throws BinaryText::ByteBuffer::Error
         */
-        template<ByteBufferCompatible ByteType>
+        template<typename ByteType>
+            requires ByteBufferStringCompatible<ByteType>
         ByteBuffer<ByteType> DecodeStringToByteBuffer(const std::string& encodedString_, const Case case_ = Case::MIXED)
         {
+            using Internal::charSize;
+
             ByteBuffer<ByteType> decodedByteBuffer;
             ByteBuffer<ByteType> byteBuffer(8192);
             typename ByteBuffer<ByteType>::SizeType bufferIterator(0);
@@ -1536,7 +1877,7 @@ namespace BinaryText
                     switch(counter) {
                         case 2U: break;
                         case 1U: bitset <<= charSize / 2; break;
-                        default: UnreachableTerminate();
+                        default: Internal::UnreachableTerminate();
                     }
 
                     if(bufferIterator < 8192) {
@@ -1628,7 +1969,7 @@ namespace BinaryText
             std::string _what;
         };
 
-        static_assert(charSize == 8, "These Base32 functions only works if a char is 8 bits big");
+        static_assert(Internal::charSize == 8, "These Base32 functions only works if a char is 8 bits big");
 
         /**
          * @brief Encodes a not-encoded string into a Base32 encoded string.
@@ -1638,13 +1979,15 @@ namespace BinaryText
         */
         std::string EncodeStringToString(const std::string& string_, const bool withPadding_ = true)
         {
+            using Internal::charSize;
+
             std::string encodedString;
 
             try {
                 if(string_.size() > 0) {
-                    encodedString.reserve(static_cast<std::size_t>(std::ceil(static_cast<double>(string_.size()) / 5.0) * 8.0));
+                    encodedString.reserve(static_cast<std::string::size_type>(std::ceil(static_cast<double>(string_.size()) / 5.0) * 8.0));
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -1655,7 +1998,7 @@ namespace BinaryText
                 for(std::string::const_iterator jter(iter); jter != string_.cend(); ++jter) {
                     counter += 1U;
                     bitset <<= charSize;
-                    bitset |= std::bitset<charSize * 5>(std::bitset<charSize>(*jter).to_ullong());
+                    bitset |= std::bitset<charSize * 5>(std::bitset<charSize>(static_cast<unsigned char>(*jter)).to_ullong());
 
                     if(std::next(jter, 1) == string_.cend() or std::next(jter, 1) == std::next(iter, 5)) {
                         iter = jter;
@@ -1690,7 +2033,7 @@ namespace BinaryText
 
                         break;
                     }
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 for(unsigned int i(1U); i < 9U; ++i) {
@@ -1701,7 +2044,7 @@ namespace BinaryText
                             break;
                         }
                     } else {
-                        std::bitset<(charSize * 5) / 8> partialBitset((bitset >> ((charSize * 5) - (5 * static_cast<std::size_t>(i)))).to_ullong());
+                        std::bitset<(charSize * 5) / 8> partialBitset((bitset >> ((charSize * 5) - (5 * i))).to_ullong());
 
                         switch(partialBitset.to_ullong()) {
                             case 0B00000ULL: encodedString.append(1, 'A'); break;
@@ -1736,7 +2079,7 @@ namespace BinaryText
                             case 0B11101ULL: encodedString.append(1, '5'); break;
                             case 0B11110ULL: encodedString.append(1, '6'); break;
                             case 0B11111ULL: encodedString.append(1, '7'); break;
-                            default: UnreachableTerminate();
+                            default: Internal::UnreachableTerminate();
                         }
                     }
                 }
@@ -1747,21 +2090,24 @@ namespace BinaryText
         /**
          * @brief Encodes a ByteBuffer into a Base32 encoded string.
          * @tparam ByteType Type that satisfies the ByteBufferCompatible concept (char, signed char, unsigned char and std::byte).
-         * @param[in] string_ String to be encoded.
+         * @param[in] byteBuffer_ ByteBuffer to be encoded.
          * @param[in] withPadding_ Whether or not padding (the '=' character) should be included.
          * @throws BinaryText::Base32::Error
          * @throws BinaryText::ByteBuffer::Error
         */
-        template<ByteBufferCompatible ByteType>
+        template<typename ByteType>
+            requires ByteBufferStringCompatible<ByteType>
         std::string EncodeByteBufferToString(const ByteBuffer<ByteType>& byteBuffer_, const bool withPadding_ = true)
         {
+            using Internal::charSize;
+
             std::string encodedString;
 
             try {
                 if(byteBuffer_.GetSize() > 0) {
-                    encodedString.reserve(static_cast<std::size_t>(std::ceil(static_cast<double>(byteBuffer_.GetSize()) / 5.0) * 8.0));
+                    encodedString.reserve(static_cast<std::string::size_type>(std::ceil(static_cast<double>(byteBuffer_.GetSize()) / 5.0) * 8.0));
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -1772,7 +2118,7 @@ namespace BinaryText
                 for(typename ByteBuffer<ByteType>::ConstantIterator jter(iter); jter != byteBuffer_.ConstantEnd(); ++jter) {
                     counter += 1U;
                     bitset <<= charSize;
-                    bitset |= std::bitset<charSize * 5>(std::bitset<charSize>(static_cast<char>(*jter)).to_ullong());
+                    bitset |= std::bitset<charSize * 5>(std::bitset<charSize>(static_cast<unsigned char>(*jter)).to_ullong());
 
                     if(std::next(jter, 1) == byteBuffer_.ConstantEnd() or std::next(jter, 1) == std::next(iter, 5)) {
                         iter = jter;
@@ -1807,7 +2153,7 @@ namespace BinaryText
 
                         break;
                     }
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 for(unsigned int i(1U); i < 9U; ++i) {
@@ -1853,7 +2199,7 @@ namespace BinaryText
                             case 0B11101ULL: encodedString.append(1, '5'); break;
                             case 0B11110ULL: encodedString.append(1, '6'); break;
                             case 0B11111ULL: encodedString.append(1, '7'); break;
-                            default: UnreachableTerminate();
+                            default: Internal::UnreachableTerminate();
                         }
                     }
                 }
@@ -1868,13 +2214,15 @@ namespace BinaryText
         */
         std::string DecodeStringToString(const std::string& encodedString_)
         {
+            using Internal::charSize;
+
             std::string decodedString;
 
             try {
                 if(encodedString_.size() > 0) {
-                    decodedString.reserve(static_cast<std::size_t>(std::ceil(static_cast<double>(encodedString_.size()) / 8.0) * 5.0));
+                    decodedString.reserve(static_cast<std::string::size_type>(std::ceil(static_cast<double>(encodedString_.size()) / 8.0) * 5.0));
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -2006,7 +2354,7 @@ namespace BinaryText
                         break;
                     }
                     case 1U: throw Error(Error::Type::STRING_PARSE_ERROR);
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 switch(paddingCounter) {
@@ -2058,9 +2406,12 @@ namespace BinaryText
          * @throws BinaryText::Base32::Error
          * @throws BinaryText::ByteBuffer::Error
         */
-        template<ByteBufferCompatible ByteType>
+        template<typename ByteType>
+            requires ByteBufferStringCompatible<ByteType>
         ByteBuffer<ByteType> DecodeStringToByteBuffer(const std::string& encodedString_)
         {
+            using Internal::charSize;
+
             ByteBuffer<ByteType> decodedByteBuffer;
             ByteBuffer<ByteType> byteBuffer(8192);
             typename ByteBuffer<ByteType>::SizeType bufferIterator(0);
@@ -2215,7 +2566,7 @@ namespace BinaryText
                         break;
                     }
                     case 1U: throw Error(Error::Type::STRING_PARSE_ERROR);
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 switch(paddingCounter) {
@@ -2324,7 +2675,7 @@ namespace BinaryText
             std::string _what;
         };
 
-        static_assert(charSize == 8, "These Base32Hex functions only works if a char is 8 bits big");
+        static_assert(Internal::charSize == 8, "These Base32Hex functions only works if a char is 8 bits big");
 
         /**
          * @brief Encodes a not-encoded string into a Base32Hex encoded string.
@@ -2334,13 +2685,15 @@ namespace BinaryText
         */
         std::string EncodeStringToString(const std::string& string_, const bool withPadding_ = true)
         {
+            using Internal::charSize;
+
             std::string encodedString;
 
             try {
                 if(string_.size() > 0) {
-                    encodedString.reserve(static_cast<std::size_t>(std::ceil(static_cast<double>(string_.size()) / 5.0) * 8.0));
+                    encodedString.reserve(static_cast<std::string::size_type>(std::ceil(static_cast<double>(string_.size()) / 5.0) * 8.0));
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -2351,7 +2704,7 @@ namespace BinaryText
                 for(std::string::const_iterator jter(iter); jter != string_.cend(); ++jter) {
                     counter += 1U;
                     bitset <<= charSize;
-                    bitset |= std::bitset<charSize * 5>(std::bitset<charSize>(*jter).to_ullong());
+                    bitset |= std::bitset<charSize * 5>(std::bitset<charSize>(static_cast<unsigned char>(*jter)).to_ullong());
 
                     if(std::next(jter, 1) == string_.cend() or std::next(jter, 1) == std::next(iter, 5)) {
                         iter = jter;
@@ -2386,124 +2739,7 @@ namespace BinaryText
 
                         break;
                     }
-                    default: UnreachableTerminate();
-                }
-
-                for(unsigned int i(1U); i < 9U; ++i) {
-                    if(i > counter) {
-                        if(withPadding_) {
-                            encodedString.append(1, '=');
-                        } else {
-                            break;
-                        }
-                    } else {
-                        std::bitset<(charSize * 5) / 8> partialBitset((bitset >> ((charSize * 5) - (5 * static_cast<std::size_t>(i)))).to_ullong());
-
-                        switch(partialBitset.to_ullong()) {
-                            case 0B00000ULL: encodedString.append(1, '0'); break;
-                            case 0B00001ULL: encodedString.append(1, '1'); break;
-                            case 0B00010ULL: encodedString.append(1, '2'); break;
-                            case 0B00011ULL: encodedString.append(1, '3'); break;
-                            case 0B00100ULL: encodedString.append(1, '4'); break;
-                            case 0B00101ULL: encodedString.append(1, '5'); break;
-                            case 0B00110ULL: encodedString.append(1, '6'); break;
-                            case 0B00111ULL: encodedString.append(1, '7'); break;
-                            case 0B01000ULL: encodedString.append(1, '8'); break;
-                            case 0B01001ULL: encodedString.append(1, '9'); break;
-                            case 0B01010ULL: encodedString.append(1, 'A'); break;
-                            case 0B01011ULL: encodedString.append(1, 'B'); break;
-                            case 0B01100ULL: encodedString.append(1, 'C'); break;
-                            case 0B01101ULL: encodedString.append(1, 'D'); break;
-                            case 0B01110ULL: encodedString.append(1, 'E'); break;
-                            case 0B01111ULL: encodedString.append(1, 'F'); break;
-                            case 0B10000ULL: encodedString.append(1, 'G'); break;
-                            case 0B10001ULL: encodedString.append(1, 'H'); break;
-                            case 0B10010ULL: encodedString.append(1, 'I'); break;
-                            case 0B10011ULL: encodedString.append(1, 'J'); break;
-                            case 0B10100ULL: encodedString.append(1, 'K'); break;
-                            case 0B10101ULL: encodedString.append(1, 'L'); break;
-                            case 0B10110ULL: encodedString.append(1, 'M'); break;
-                            case 0B10111ULL: encodedString.append(1, 'N'); break;
-                            case 0B11000ULL: encodedString.append(1, 'O'); break;
-                            case 0B11001ULL: encodedString.append(1, 'P'); break;
-                            case 0B11010ULL: encodedString.append(1, 'Q'); break;
-                            case 0B11011ULL: encodedString.append(1, 'R'); break;
-                            case 0B11100ULL: encodedString.append(1, 'S'); break;
-                            case 0B11101ULL: encodedString.append(1, 'T'); break;
-                            case 0B11110ULL: encodedString.append(1, 'U'); break;
-                            case 0B11111ULL: encodedString.append(1, 'V'); break;
-                            default: UnreachableTerminate();
-                        }
-                    }
-                }
-            }
-
-            return encodedString;
-        }
-        /**
-         * @brief Encodes a ByteBuffer into a Base32Hex encoded string.
-         * @tparam ByteType Type that satisfies the ByteBufferCompatible concept (char, signed char, unsigned char and std::byte).
-         * @param[in] string_ String to be encoded.
-         * @param[in] withPadding_ Whether or not padding (the '=' character) should be included.
-         * @throws BinaryText::Base32Hex::Error
-         * @throws BinaryText::ByteBuffer::Error
-        */
-        template<ByteBufferCompatible ByteType>
-        std::string EncodeByteBufferToString(const ByteBuffer<ByteType>& byteBuffer_, const bool withPadding_ = true)
-        {
-            std::string encodedString;
-
-            try {
-                if(byteBuffer_.GetSize() > 0) {
-                    encodedString.reserve(static_cast<std::size_t>(std::ceil(static_cast<double>(byteBuffer_.GetSize()) / 5.0) * 8.0));
-                }
-            } catch(const std::length_error& error) {
-                throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
-            }
-
-            for(typename ByteBuffer<ByteType>::ConstantIterator iter(byteBuffer_.ConstantBegin()); iter != byteBuffer_.ConstantEnd(); ++iter) {
-                std::bitset<charSize * 5> bitset;
-                unsigned int counter(0U);
-
-                for(typename ByteBuffer<ByteType>::ConstantIterator jter(iter); jter != byteBuffer_.ConstantEnd(); ++jter) {
-                    counter += 1U;
-                    bitset <<= charSize;
-                    bitset |= std::bitset<charSize * 5>(std::bitset<charSize>(static_cast<char>(*jter)).to_ullong());
-
-                    if(std::next(jter, 1) == byteBuffer_.ConstantEnd() or std::next(jter, 1) == std::next(iter, 5)) {
-                        iter = jter;
-
-                        break;
-                    }
-                }
-
-                switch(counter) {
-                    case 5U: counter = 8U; break;
-                    case 4U: {
-                        bitset <<= charSize;
-                        counter = 7U;
-
-                        break;
-                    }
-                    case 3U: {
-                        bitset <<= (charSize * 2);
-                        counter = 5U;
-
-                        break;
-                    }
-                    case 2U: {
-                        bitset <<= (charSize * 3);
-                        counter = 4U;
-
-                        break;
-                    }
-                    case 1U: {
-                        bitset <<= (charSize * 4);
-                        counter = 2U;
-
-                        break;
-                    }
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 for(unsigned int i(1U); i < 9U; ++i) {
@@ -2549,7 +2785,127 @@ namespace BinaryText
                             case 0B11101ULL: encodedString.append(1, 'T'); break;
                             case 0B11110ULL: encodedString.append(1, 'U'); break;
                             case 0B11111ULL: encodedString.append(1, 'V'); break;
-                            default: UnreachableTerminate();
+                            default: Internal::UnreachableTerminate();
+                        }
+                    }
+                }
+            }
+
+            return encodedString;
+        }
+        /**
+         * @brief Encodes a ByteBuffer into a Base32Hex encoded string.
+         * @tparam ByteType Type that satisfies the ByteBufferCompatible concept (char, signed char, unsigned char and std::byte).
+         * @param[in] byteBuffer_ ByteBuffer to be encoded.
+         * @param[in] withPadding_ Whether or not padding (the '=' character) should be included.
+         * @throws BinaryText::Base32Hex::Error
+         * @throws BinaryText::ByteBuffer::Error
+        */
+        template<typename ByteType>
+            requires ByteBufferStringCompatible<ByteType>
+        std::string EncodeByteBufferToString(const ByteBuffer<ByteType>& byteBuffer_, const bool withPadding_ = true)
+        {
+            using Internal::charSize;
+
+            std::string encodedString;
+
+            try {
+                if(byteBuffer_.GetSize() > 0) {
+                    encodedString.reserve(static_cast<std::string::size_type>(std::ceil(static_cast<double>(byteBuffer_.GetSize()) / 5.0) * 8.0));
+                }
+            } catch(const std::length_error&) {
+                throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
+            }
+
+            for(typename ByteBuffer<ByteType>::ConstantIterator iter(byteBuffer_.ConstantBegin()); iter != byteBuffer_.ConstantEnd(); ++iter) {
+                std::bitset<charSize * 5> bitset;
+                unsigned int counter(0U);
+
+                for(typename ByteBuffer<ByteType>::ConstantIterator jter(iter); jter != byteBuffer_.ConstantEnd(); ++jter) {
+                    counter += 1U;
+                    bitset <<= charSize;
+                    bitset |= std::bitset<charSize * 5>(std::bitset<charSize>(static_cast<unsigned char>(*jter)).to_ullong());
+
+                    if(std::next(jter, 1) == byteBuffer_.ConstantEnd() or std::next(jter, 1) == std::next(iter, 5)) {
+                        iter = jter;
+
+                        break;
+                    }
+                }
+
+                switch(counter) {
+                    case 5U: counter = 8U; break;
+                    case 4U: {
+                        bitset <<= charSize;
+                        counter = 7U;
+
+                        break;
+                    }
+                    case 3U: {
+                        bitset <<= (charSize * 2);
+                        counter = 5U;
+
+                        break;
+                    }
+                    case 2U: {
+                        bitset <<= (charSize * 3);
+                        counter = 4U;
+
+                        break;
+                    }
+                    case 1U: {
+                        bitset <<= (charSize * 4);
+                        counter = 2U;
+
+                        break;
+                    }
+                    default: Internal::UnreachableTerminate();
+                }
+
+                for(unsigned int i(1U); i < 9U; ++i) {
+                    if(i > counter) {
+                        if(withPadding_) {
+                            encodedString.append(1, '=');
+                        } else {
+                            break;
+                        }
+                    } else {
+                        std::bitset<(charSize * 5) / 8> partialBitset((bitset >> ((charSize * 5) - (5 * i))).to_ullong());
+
+                        switch(partialBitset.to_ullong()) {
+                            case 0B00000ULL: encodedString.append(1, '0'); break;
+                            case 0B00001ULL: encodedString.append(1, '1'); break;
+                            case 0B00010ULL: encodedString.append(1, '2'); break;
+                            case 0B00011ULL: encodedString.append(1, '3'); break;
+                            case 0B00100ULL: encodedString.append(1, '4'); break;
+                            case 0B00101ULL: encodedString.append(1, '5'); break;
+                            case 0B00110ULL: encodedString.append(1, '6'); break;
+                            case 0B00111ULL: encodedString.append(1, '7'); break;
+                            case 0B01000ULL: encodedString.append(1, '8'); break;
+                            case 0B01001ULL: encodedString.append(1, '9'); break;
+                            case 0B01010ULL: encodedString.append(1, 'A'); break;
+                            case 0B01011ULL: encodedString.append(1, 'B'); break;
+                            case 0B01100ULL: encodedString.append(1, 'C'); break;
+                            case 0B01101ULL: encodedString.append(1, 'D'); break;
+                            case 0B01110ULL: encodedString.append(1, 'E'); break;
+                            case 0B01111ULL: encodedString.append(1, 'F'); break;
+                            case 0B10000ULL: encodedString.append(1, 'G'); break;
+                            case 0B10001ULL: encodedString.append(1, 'H'); break;
+                            case 0B10010ULL: encodedString.append(1, 'I'); break;
+                            case 0B10011ULL: encodedString.append(1, 'J'); break;
+                            case 0B10100ULL: encodedString.append(1, 'K'); break;
+                            case 0B10101ULL: encodedString.append(1, 'L'); break;
+                            case 0B10110ULL: encodedString.append(1, 'M'); break;
+                            case 0B10111ULL: encodedString.append(1, 'N'); break;
+                            case 0B11000ULL: encodedString.append(1, 'O'); break;
+                            case 0B11001ULL: encodedString.append(1, 'P'); break;
+                            case 0B11010ULL: encodedString.append(1, 'Q'); break;
+                            case 0B11011ULL: encodedString.append(1, 'R'); break;
+                            case 0B11100ULL: encodedString.append(1, 'S'); break;
+                            case 0B11101ULL: encodedString.append(1, 'T'); break;
+                            case 0B11110ULL: encodedString.append(1, 'U'); break;
+                            case 0B11111ULL: encodedString.append(1, 'V'); break;
+                            default: Internal::UnreachableTerminate();
                         }
                     }
                 }
@@ -2564,13 +2920,16 @@ namespace BinaryText
         */
         std::string DecodeStringToString(const std::string& encodedString_)
         {
+            using Internal::charSize;
+            using Internal::UnreachableTerminate;
+
             std::string decodedString;
 
             try {
                 if(encodedString_.size() > 0) {
-                    decodedString.reserve(static_cast<std::size_t>(std::ceil(static_cast<double>(encodedString_.size()) / 8.0) * 5.0));
+                    decodedString.reserve(static_cast<std::string::size_type>(std::ceil(static_cast<double>(encodedString_.size()) / 8.0) * 5.0));
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -2702,7 +3061,7 @@ namespace BinaryText
                         break;
                     }
                     case 1U: throw Error(Error::Type::STRING_PARSE_ERROR);
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 switch(paddingCounter) {
@@ -2754,9 +3113,12 @@ namespace BinaryText
          * @throws BinaryText::Base32Hex::Error
          * @throws BinaryText::ByteBuffer::Error
         */
-        template<ByteBufferCompatible ByteType>
+        template<typename ByteType>
+            requires ByteBufferStringCompatible<ByteType>
         ByteBuffer<ByteType> DecodeStringToByteBuffer(const std::string& encodedString_)
         {
+            using Internal::charSize;
+
             ByteBuffer<ByteType> decodedByteBuffer;
             ByteBuffer<ByteType> byteBuffer(8192);
             typename ByteBuffer<ByteType>::SizeType bufferIterator(0);
@@ -2911,7 +3273,7 @@ namespace BinaryText
                         break;
                     }
                     case 1U: throw Error(Error::Type::STRING_PARSE_ERROR);
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 switch(paddingCounter) {
@@ -3020,7 +3382,7 @@ namespace BinaryText
             std::string _what;
         };
 
-        static_assert(charSize == 8, "These Base64 functions only works if a char is 8 bits big");
+        static_assert(Internal::charSize == 8, "These Base64 functions only works if a char is 8 bits big");
 
         /**
          * @brief Encodes a not-encoded string into a Base64 encoded string.
@@ -3030,13 +3392,15 @@ namespace BinaryText
         */
         std::string EncodeStringToString(const std::string& string_, const bool withPadding_ = true)
         {
+            using Internal::charSize;
+
             std::string encodedString;
 
             try {
                 if(string_.size() > 0) {
-                    encodedString.reserve(static_cast<std::size_t>(std::ceil((static_cast<double>(string_.size())) / 3.0) * 4.0));
+                    encodedString.reserve(static_cast<std::string::size_type>(std::ceil((static_cast<double>(string_.size())) / 3.0) * 4.0));
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -3047,7 +3411,7 @@ namespace BinaryText
                 for(std::string::const_iterator jter(iter); jter != string_.cend(); ++jter) {
                     counter += 1U;
                     bitset <<= charSize;
-                    bitset |= std::bitset<charSize * 3>(std::bitset<charSize>(*jter).to_ullong());
+                    bitset |= std::bitset<charSize * 3>(std::bitset<charSize>(static_cast<unsigned char>(*jter)).to_ullong());
 
                     if(std::next(jter, 1) == string_.cend() or std::next(jter, 1) == std::next(iter, 3)) {
                         iter = jter;
@@ -3070,7 +3434,7 @@ namespace BinaryText
 
                         break;
                     }
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 for(unsigned int i(1U); i < 5U; ++i) {
@@ -3148,7 +3512,7 @@ namespace BinaryText
                             case 0B111101ULL: encodedString.append(1, '9'); break;
                             case 0B111110ULL: encodedString.append(1, '+'); break;
                             case 0B111111ULL: encodedString.append(1, '/'); break;
-                            default: UnreachableTerminate();
+                            default: Internal::UnreachableTerminate();
                         }
                     }
                 }
@@ -3159,21 +3523,24 @@ namespace BinaryText
         /**
          * @brief Encodes a ByteBuffer into a Base64 encoded string.
          * @tparam ByteType Type that satisfies the ByteBufferCompatible concept (char, signed char, unsigned char and std::byte).
-         * @param[in] string_ String to be encoded.
+         * @param[in] byteBuffer_ ByteBuffer to be encoded.
          * @param[in] withPadding_ Whether or not padding (the '=' character) should be included.
          * @throws BinaryText::Base64::Error
          * @throws BinaryText::ByteBuffer::Error
         */
-        template<ByteBufferCompatible ByteType>
+        template<typename ByteType>
+            requires ByteBufferStringCompatible<ByteType>
         std::string EncodeByteBufferToString(const ByteBuffer<ByteType>& byteBuffer_, const bool withPadding_ = true)
         {
+            using Internal::charSize;
+
             std::string encodedString;
 
             try {
                 if(byteBuffer_.GetSize() > 0) {
-                    encodedString.reserve(static_cast<std::size_t>(std::ceil((static_cast<double>(byteBuffer_.GetSize())) / 3.0) * 4.0));
+                    encodedString.reserve(static_cast<std::string::size_type>(std::ceil((static_cast<double>(byteBuffer_.GetSize())) / 3.0) * 4.0));
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -3184,7 +3551,7 @@ namespace BinaryText
                 for(typename ByteBuffer<ByteType>::ConstantIterator jter(iter); jter != byteBuffer_.ConstantEnd(); ++jter) {
                     counter += 1U;
                     bitset <<= charSize;
-                    bitset |= std::bitset<charSize * 3>(std::bitset<charSize>(static_cast<char>(*jter)).to_ullong());
+                    bitset |= std::bitset<charSize * 3>(std::bitset<charSize>(static_cast<unsigned char>(*jter)).to_ullong());
 
                     if(std::next(jter, 1) == byteBuffer_.ConstantEnd() or std::next(jter, 1) == std::next(iter, 3)) {
                         iter = jter;
@@ -3207,7 +3574,7 @@ namespace BinaryText
 
                         break;
                     }
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 for(unsigned int i(1U); i < 5U; ++i) {
@@ -3285,7 +3652,7 @@ namespace BinaryText
                             case 0B111101ULL: encodedString.append(1, '9'); break;
                             case 0B111110ULL: encodedString.append(1, '+'); break;
                             case 0B111111ULL: encodedString.append(1, '/'); break;
-                            default: UnreachableTerminate();
+                            default: Internal::UnreachableTerminate();
                         }
                     }
                 }
@@ -3300,13 +3667,15 @@ namespace BinaryText
         */
         std::string DecodeStringToString(const std::string& encodedString_)
         {
+            using Internal::charSize;
+
             std::string decodedString;
 
             try {
                 if(encodedString_.size() > 0) {
-                    decodedString.reserve(static_cast<std::size_t>(std::ceil((static_cast<double>(encodedString_.size())) / 4.0) * 3.0));
+                    decodedString.reserve(static_cast<std::string::size_type>(std::ceil((static_cast<double>(encodedString_.size())) / 4.0) * 3.0));
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -3423,7 +3792,7 @@ namespace BinaryText
                         break;
                     }
                     case 1U: throw Error(Error::Type::STRING_PARSE_ERROR);
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 switch(paddingCounter) {
@@ -3458,9 +3827,12 @@ namespace BinaryText
          * @throws BinaryText::Base64::Error
          * @throws BinaryText::ByteBuffer::Error
         */
-        template<ByteBufferCompatible ByteType>
+        template<typename ByteType>
+            requires ByteBufferStringCompatible<ByteType>
         ByteBuffer<ByteType> DecodeStringToByteBuffer(const std::string& encodedString_)
         {
+            using Internal::charSize;
+
             ByteBuffer<ByteType> decodedByteBuffer;
             ByteBuffer<ByteType> byteBuffer(8192);
             typename ByteBuffer<ByteType>::SizeType bufferIterator(0);
@@ -3600,7 +3972,7 @@ namespace BinaryText
                         break;
                     }
                     case 1U: throw Error(Error::Type::STRING_PARSE_ERROR);
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 switch(paddingCounter) {
@@ -3702,13 +4074,15 @@ namespace BinaryText
         */
         std::string EncodeStringToString(const std::string& string_, const bool withPadding_ = true)
         {
+            using Internal::charSize;
+
             std::string encodedString;
 
             try {
                 if(string_.size() > 0) {
-                    encodedString.reserve(static_cast<std::size_t>(std::ceil((static_cast<double>(string_.size())) / 3.0) * 4.0));
+                    encodedString.reserve(static_cast<std::string::size_type>(std::ceil((static_cast<double>(string_.size())) / 3.0) * 4.0));
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -3719,7 +4093,7 @@ namespace BinaryText
                 for(std::string::const_iterator jter(iter); jter != string_.cend(); ++jter) {
                     counter += 1U;
                     bitset <<= charSize;
-                    bitset |= std::bitset<charSize * 3>(std::bitset<charSize>(*jter).to_ullong());
+                    bitset |= std::bitset<charSize * 3>(std::bitset<charSize>(static_cast<unsigned char>(*jter)).to_ullong());
 
                     if((std::next(jter, 1) == string_.cend()) or (std::next(jter, 1) == std::next(iter, 3))) {
                         iter = jter;
@@ -3742,7 +4116,7 @@ namespace BinaryText
 
                         break;
                     }
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 for(unsigned int i(1U); i < 5U; ++i) {
@@ -3820,7 +4194,7 @@ namespace BinaryText
                             case 0B111101ULL: encodedString.append(1, '9'); break;
                             case 0B111110ULL: encodedString.append(1, '-'); break;
                             case 0B111111ULL: encodedString.append(1, '_'); break;
-                            default: UnreachableTerminate();
+                            default: Internal::UnreachableTerminate();
                         }
                     }
                 }
@@ -3831,21 +4205,24 @@ namespace BinaryText
         /**
          * @brief Encodes a ByteBuffer into a Base64Url encoded string.
          * @tparam ByteType Type that satisfies the ByteBufferCompatible concept (char, signed char, unsigned char and std::byte).
-         * @param[in] string_ String to be encoded.
+         * @param[in] byteBuffer_ ByteBuffer to be encoded.
          * @param[in] withPadding_ Whether or not padding (the '=' character) should be included.
          * @throws BinaryText::Base64Url::Error
          * @throws BinaryText::ByteBuffer::Error
         */
-        template<ByteBufferCompatible ByteType>
+        template<typename ByteType>
+            requires ByteBufferStringCompatible<ByteType>
         std::string EncodeByteBufferToString(const ByteBuffer<ByteType>& byteBuffer_, const bool withPadding_ = true)
         {
+            using Internal::charSize;
+
             std::string encodedString;
 
             try {
                 if(byteBuffer_.GetSize() > 0) {
-                    encodedString.reserve(static_cast<std::size_t>(std::ceil((static_cast<double>(byteBuffer_.GetSize())) / 3.0) * 4.0));
+                    encodedString.reserve(static_cast<std::string::size_type>(std::ceil((static_cast<double>(byteBuffer_.GetSize())) / 3.0) * 4.0));
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -3856,7 +4233,7 @@ namespace BinaryText
                 for(typename ByteBuffer<ByteType>::ConstantIterator jter(iter); jter != byteBuffer_.ConstantEnd(); ++jter) {
                     counter += 1U;
                     bitset <<= charSize;
-                    bitset |= std::bitset<charSize * 3>(std::bitset<charSize>(static_cast<char>(*jter)).to_ullong());
+                    bitset |= std::bitset<charSize * 3>(std::bitset<charSize>(static_cast<unsigned char>(*jter)).to_ullong());
 
                     if(std::next(jter, 1) == byteBuffer_.ConstantEnd() or std::next(jter, 1) == std::next(iter, 3)) {
                         iter = jter;
@@ -3879,7 +4256,7 @@ namespace BinaryText
 
                         break;
                     }
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 for(unsigned int i(1U); i < 5U; ++i) {
@@ -3957,7 +4334,7 @@ namespace BinaryText
                             case 0B111101ULL: encodedString.append(1, '9'); break;
                             case 0B111110ULL: encodedString.append(1, '-'); break;
                             case 0B111111ULL: encodedString.append(1, '_'); break;
-                            default: UnreachableTerminate();
+                            default: Internal::UnreachableTerminate();
                         }
                     }
                 }
@@ -3972,13 +4349,15 @@ namespace BinaryText
         */
         std::string DecodeStringToString(const std::string& encodedString_)
         {
+            using Internal::charSize;
+
             std::string decodedString;
 
             try {
                 if(encodedString_.size() > 0) {
-                    decodedString.reserve(static_cast<std::size_t>(std::ceil((static_cast<double>(encodedString_.size())) / 4.0) * 3.0));
+                    decodedString.reserve(static_cast<std::string::size_type>(std::ceil((static_cast<double>(encodedString_.size())) / 4.0) * 3.0));
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -4095,7 +4474,7 @@ namespace BinaryText
                         break;
                     }
                     case 1U: throw Error(Error::Type::STRING_PARSE_ERROR);
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 switch(paddingCounter) {
@@ -4130,9 +4509,12 @@ namespace BinaryText
          * @throws BinaryText::Base64Url::Error
          * @throws BinaryText::ByteBuffer::Error
         */
-        template<ByteBufferCompatible ByteType>
+        template<typename ByteType>
+            requires ByteBufferStringCompatible<ByteType>
         ByteBuffer<ByteType> DecodeStringToByteBuffer(const std::string& encodedString_)
         {
+            using Internal::charSize;
+
             ByteBuffer<ByteType> decodedByteBuffer;
             ByteBuffer<ByteType> byteBuffer(8192);
             typename ByteBuffer<ByteType>::SizeType bufferIterator(0);
@@ -4272,7 +4654,7 @@ namespace BinaryText
                         break;
                     }
                     case 1U: throw Error(Error::Type::STRING_PARSE_ERROR);
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 switch(paddingCounter) {
@@ -4364,7 +4746,7 @@ namespace BinaryText
             std::string _what;
         };
 
-        static_assert(charSize == 8, "These Ascii85 functions only works if a char is 8 bits big");
+        static_assert(Internal::charSize == 8, "These Ascii85 functions only works if a char is 8 bits big");
 
         /**
          * @brief Encodes a not-encoded string into an Ascii85 encoded string.
@@ -4375,13 +4757,15 @@ namespace BinaryText
         */
         std::string EncodeStringToString(const std::string& string_, const bool foldSpaces_ = false, const bool adobeMode_ = false)
         {
+            using Internal::charSize;
+
             std::string encodedString;
 
             try {
                 if(string_.size() > 0) {
-                    encodedString.reserve(string_.size() + static_cast<std::size_t>(std::ceil(static_cast<double>(string_.size()) / 4.0)));
+                    encodedString.reserve(string_.size() + static_cast<std::string::size_type>(std::ceil(static_cast<double>(string_.size()) / 4.0)));
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -4396,7 +4780,7 @@ namespace BinaryText
                 for(std::string::const_iterator jter(iter); jter != string_.end(); ++jter) {
                     counter += 1U;
                     bitset <<= charSize;
-                    bitset |= std::bitset<charSize * 4>(std::bitset<charSize>(*jter).to_ullong());
+                    bitset |= std::bitset<charSize * 4>(std::bitset<charSize>(static_cast<unsigned char>(*jter)).to_ullong());
 
                     if(std::next(jter, 1) == string_.cend() or std::next(jter, 1) == std::next(iter, 4)) {
                         iter = jter;
@@ -4410,7 +4794,7 @@ namespace BinaryText
                     case 3U: bitset <<= charSize; break;
                     case 2U: bitset <<= (charSize * 2); break;
                     case 1U: bitset <<= (charSize * 3); break;
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 if(bitset == std::bitset<charSize * 4>(0B00000000000000000000000000000000ULL)) {
@@ -4445,22 +4829,26 @@ namespace BinaryText
         /**
          * @brief Encodes a ByteBuffer into a Ascii85 encoded string.
          * @tparam ByteType Type that satisfies the ByteBufferCompatible concept (char, signed char, unsigned char and std::byte).
-         * @param[in] string_ String to be encoded.
+         * @param[in] byteBuffer_ ByteBuffer to be encoded.
          * @param[in] foldSpaces_ Whether or not to fold spaces. That is, to turn 4 spaces (00100000001000000010000000100000) into y.
          * @param[in] adobeMode_ Whether or not to surround the encoded string with <~ and ~> delimiters.
          * @throws BinaryText::Ascii85::Error
          * @throws BinaryText::ByteBuffer::Error
         */
-        template<ByteBufferCompatible ByteType>
+        template<typename ByteType>
+            requires ByteBufferStringCompatible<ByteType>
         std::string EncodeByteBufferToString(const ByteBuffer<ByteType>& byteBuffer_, const bool foldSpaces_ = false, const bool adobeMode_ = false)
         {
+            using Internal::charSize;
+
             std::string encodedString;
 
             try {
                 if(byteBuffer_.GetSize() > 0) {
-                    encodedString.reserve(byteBuffer_.GetSize() + static_cast<std::size_t>(std::ceil(static_cast<double>(byteBuffer_.GetSize()) / 4.0)));
+                    encodedString.reserve(byteBuffer_.GetSize()
+                                          + static_cast<std::string::size_type>(std::ceil(static_cast<double>(byteBuffer_.GetSize()) / 4.0)));
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -4475,7 +4863,7 @@ namespace BinaryText
                 for(typename ByteBuffer<ByteType>::ConstantIterator jter(iter); jter != byteBuffer_.ConstantEnd(); ++jter) {
                     counter += 1U;
                     bitset <<= charSize;
-                    bitset |= std::bitset<charSize>(static_cast<char>(*jter)).to_ullong();
+                    bitset |= std::bitset<charSize>(static_cast<unsigned char>(*jter)).to_ullong();
 
                     if(std::next(jter, 1) == byteBuffer_.ConstantEnd() or std::next(jter, 1) == std::next(iter, 4)) {
                         iter = jter;
@@ -4489,7 +4877,7 @@ namespace BinaryText
                     case 3U: bitset <<= charSize; break;
                     case 2U: bitset <<= (charSize * 2); break;
                     case 1U: bitset <<= (charSize * 3); break;
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
 
                 if(bitset == std::bitset<charSize * 4>(0B00000000000000000000000000000000ULL)) {
@@ -4530,13 +4918,16 @@ namespace BinaryText
         */
         std::string DecodeStringToString(const std::string& encodedString_, const bool foldSpaces_ = false, const bool adobeMode_ = false)
         {
+            using Internal::charSize;
+
             std::string decodedString;
 
             try {
                 if(encodedString_.size() > 0) {
-                    decodedString.reserve(encodedString_.size() - static_cast<std::size_t>(std::ceil(static_cast<double>(encodedString_.size()) / 5.0)));
+                    decodedString.reserve(encodedString_.size()
+                                          - static_cast<std::string::size_type>(std::ceil(static_cast<double>(encodedString_.size()) / 5.0)));
                 }
-            } catch(const std::length_error& error) {
+            } catch(const std::length_error&) {
                 throw Error(Error::Type::INTERNAL_STRING_RESERVE_ERROR);
             }
 
@@ -4605,7 +4996,7 @@ namespace BinaryText
                                     continue;
                                 }
                             } else {
-                                const unsigned long long partialBitsetNumber(std::bitset<charSize>(*jter).to_ullong());
+                                const unsigned long long partialBitsetNumber(std::bitset<charSize>(static_cast<unsigned char>(*jter)).to_ullong());
                                 counter += 1U;
 
                                 if(partialBitsetNumber < 33ULL or partialBitsetNumber > 117ULL) {
@@ -4617,7 +5008,7 @@ namespace BinaryText
                                         case 3U: bitsetNumber += (partialBitsetNumber - 33ULL) * (85ULL * 85ULL); break;
                                         case 4U: bitsetNumber += (partialBitsetNumber - 33ULL) * 85ULL; break;
                                         case 5U: bitsetNumber += partialBitsetNumber - 33ULL; break;
-                                        default: UnreachableTerminate();
+                                        default: Internal::UnreachableTerminate();
                                     }
 
                                     if(std::next(jter, 1) == encodedStringEnd or std::next(jter, 1) == std::next(iter, 5)) {
@@ -4643,7 +5034,7 @@ namespace BinaryText
                             case 3U: bitsetNumber += 84ULL * 85ULL * 85ULL; break;
                             case 4U: bitsetNumber += 84ULL * 85ULL; break;
                             case 5U: bitsetNumber += 84ULL; break;
-                            default: UnreachableTerminate();
+                            default: Internal::UnreachableTerminate();
                         }
                     }
 
@@ -4676,7 +5067,7 @@ namespace BinaryText
                     }
                     case 3U: decodedString.append(1, static_cast<char>(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong()))); break;
                     case 4U: break;
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
             }
 
@@ -4691,9 +5082,12 @@ namespace BinaryText
          * @throws BinaryText::Ascii85::Error
          * @throws BinaryText::ByteBuffer::Error
         */
-        template<ByteBufferCompatible ByteType>
+        template<typename ByteType>
+            requires ByteBufferStringCompatible<ByteType>
         ByteBuffer<ByteType> DecodeStringToByteBuffer(const std::string& encodedString_, const bool foldSpaces_ = false, const bool adobeMode_ = false)
         {
+            using Internal::charSize;
+
             ByteBuffer<ByteType> decodedByteBuffer;
             ByteBuffer<ByteType> byteBuffer(8192);
             typename ByteBuffer<ByteType>::SizeType bufferIterator(0);
@@ -4792,7 +5186,7 @@ namespace BinaryText
                                     continue;
                                 }
                             } else {
-                                const unsigned long long partialBitsetNumber(std::bitset<charSize>(*jter).to_ullong());
+                                const unsigned long long partialBitsetNumber(std::bitset<charSize>(static_cast<unsigned char>(*jter)).to_ullong());
                                 counter += 1U;
 
                                 if(partialBitsetNumber < 33ULL or partialBitsetNumber > 117ULL) {
@@ -4804,7 +5198,7 @@ namespace BinaryText
                                         case 3U: bitsetNumber += (partialBitsetNumber - 33ULL) * (85ULL * 85ULL); break;
                                         case 4U: bitsetNumber += (partialBitsetNumber - 33ULL) * 85ULL; break;
                                         case 5U: bitsetNumber += partialBitsetNumber - 33ULL; break;
-                                        default: UnreachableTerminate();
+                                        default: Internal::UnreachableTerminate();
                                     }
 
                                     if(std::next(jter, 1) == encodedStringEnd or std::next(jter, 1) == std::next(iter, 5)) {
@@ -4830,7 +5224,7 @@ namespace BinaryText
                             case 3U: bitsetNumber += 84ULL * 85ULL * 85ULL; break;
                             case 4U: bitsetNumber += 84ULL * 85ULL; break;
                             case 5U: bitsetNumber += 84ULL; break;
-                            default: UnreachableTerminate();
+                            default: Internal::UnreachableTerminate();
                         }
                     }
 
@@ -4863,7 +5257,7 @@ namespace BinaryText
                     }
                     case 3U: addToByteBuffer(static_cast<unsigned char>((bitset >> (charSize * 3)).to_ullong())); break;
                     case 4U: break;
-                    default: UnreachableTerminate();
+                    default: Internal::UnreachableTerminate();
                 }
             }
 

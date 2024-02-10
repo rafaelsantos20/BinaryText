@@ -143,7 +143,7 @@ namespace Utility
                     }
                 } else if(argument = "--algorithm="; iter->find(argument) == 0) {
                     if(_algorithm == Algorithm::NONE) {
-                        const std::string_view algorithmOption(std::next(iter->cbegin(), argument.size()), iter->cend());
+                        const std::string_view algorithmOption(std::next(iter->cbegin(), static_cast<std::ptrdiff_t>(argument.size())), iter->cend());
 
                         if(algorithmOption == "base16") {
                             _algorithm = Algorithm::BASE_16;
@@ -165,7 +165,7 @@ namespace Utility
                     }
                 } else if(argument = "--case="; iter->find(argument) == 0) {
                     if(_case == Case::NONE) {
-                        const std::string_view caseOption(std::next(iter->cbegin(), argument.size()), iter->cend());
+                        const std::string_view caseOption(std::next(iter->cbegin(), static_cast<std::ptrdiff_t>(argument.size())), iter->cend());
 
                         if(caseOption == "lowercase") {
                             _case = Case::LOWERCASE;
